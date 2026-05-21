@@ -14,13 +14,19 @@ go build -o ast.exe ./cmd/ast
 
 ## Runners
 
-`ast` supports three runner backends. Pick one via `default_runner` in `ast.yaml` or `--runner=NAME` on the command line.
+`ast` ships three runner backends. **Only `api` invokes a real agent — it is
+the only mode whose pass/fail result can be used to validate a skill for
+release.** Pick one via `default_runner` in `ast.yaml` or `--runner=NAME` on
+the command line.
 
-| Runner   | What it does                                                                                  |
-|----------|-----------------------------------------------------------------------------------------------|
-| `mock`   | Deterministic stub. No model calls. Useful for harness smoke-tests.                           |
-| `sandbox`| Simulates an agent locally by pattern-matching the skill instructions. No model calls.        |
-| `api`    | Real Claude API agent. Loads skill instructions into the system prompt and lets the model drive `read_file` / `edit_file` / `run_command` / `list_files` tools inside a per-scenario workspace. |
+| Runner    | What it does                                                                  | Use for                          |
+|-----------|-------------------------------------------------------------------------------|----------------------------------|
+| `api`     | Real Claude API agent. Loads skill instructions into the system prompt and exposes the skill's declared tool whitelist (or all four builtins if none declared). The model drives `read_file` / `edit_file` / `run_command` / `list_files` inside a per-scenario workspace. | **Skill validation. Default.**   |
+| `sandbox` | Keyword-matching stub; does not call any model. Prints a warning on use.      | Smoke-testing `ast` itself.      |
+| `mock`    | Fixed-output stub; does not call any model. Prints a warning on use.          | Smoke-testing `ast` itself.      |
+
+Selecting `mock` or `sandbox` prints a stderr warning that the result
+**cannot** be used to validate skill compliance.
 
 ### Using the `api` runner
 
@@ -28,12 +34,42 @@ go build -o ast.exe ./cmd/ast
 2. Set it via either:
    - `ANTHROPIC_API_KEY` environment variable (recommended), or
    - `api.key` in `ast.yaml`.
-3. Run with `--runner=api`:
+3. The default runner is already `api`, so:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-./ast.exe test ./skills/my-skill --runner=api
+./ast.exe test ./skills/my-skill
 ```
+
+### Skill tool whitelist
+
+A skill that declares a `tools/` directory restricts the agent to only those
+tools. Each `tools/*.json` file is one Anthropic-format tool definition.
+
+The simplest form references a builtin by name:
+
+```json
+{"name": "read_file"}
+```
+
+The fuller form declares a custom tool the model can call (note: ast has no
+executor for custom tools; calls will return an "unknown tool" error — useful
+when you want to detect that the agent reaches for a forbidden capability):
+
+```json
+{
+  "name": "run_test",
+  "description": "Run the project's test suite",
+  "input_schema": {
+    "type": "object",
+    "properties": {"package": {"type": "string"}},
+    "required": ["package"]
+  }
+}
+```
+
+If a skill has no `tools/` directory, all four builtins are exposed
+(backwards-compatible default).
 
 ### `ast.yaml` reference
 
@@ -41,7 +77,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 project: agent-skill-test
 scenarios_dir: ./scenarios
 reports_dir: ./reports
-default_runner: mock          # mock | sandbox | api
+default_runner: api           # api | sandbox | mock — only api validates skills
 api:
   key: ""                     # leave empty to read ANTHROPIC_API_KEY
   model: claude-sonnet-4-6    # any messages-API model id
