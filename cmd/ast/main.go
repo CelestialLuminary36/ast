@@ -200,12 +200,16 @@ func cmdTest(args []string) error {
 			return fmt.Errorf("create workspace: %w", err)
 		}
 
-		fmt.Printf("运行场景: %s ...\n", sc.ID)
+		fmt.Printf("\n=== 场景: %s ===\n", sc.ID)
+		fmt.Printf("[STEP 1] 初始化 Git 隔离沙盒 ... ")
+		// workspace.New 已在循环顶部完成
+		fmt.Println("SUCCESS")
+
+		fmt.Printf("[STEP 2] 调用 Agent (%s) ... ", runnerName)
 		result, runErr := rnr.Run(ctx, *sk, sc, ws.Root)
 		ws.Cleanup()
-
 		if runErr != nil {
-			fmt.Printf("  └── [RESULT] RUN ERROR: %v\n\n", runErr)
+			fmt.Printf("FAILED: %v\n", runErr)
 			rep.AddEntry(report.Entry{
 				ScenarioID: sc.ID,
 				Passed:     false,
@@ -213,10 +217,12 @@ func cmdTest(args []string) error {
 			})
 			continue
 		}
+		fmt.Printf("SUCCESS (耗时 %s)\n", result.Duration.Round(time.Millisecond))
 
+		fmt.Printf("[STEP 3] 规则审计 ... ")
 		judgement, err := jdg.Judge(result, sc)
 		if err != nil {
-			fmt.Printf("  └── [RESULT] JUDGE ERROR: %v\n\n", err)
+			fmt.Printf("ERROR: %v\n", err)
 			rep.AddEntry(report.Entry{
 				ScenarioID: sc.ID,
 				Passed:     false,
@@ -225,15 +231,13 @@ func cmdTest(args []string) error {
 			})
 			continue
 		}
-
 		if judgement.Passed {
-			fmt.Printf("  └── [RESULT] PASSED\n\n")
+			fmt.Println("PASSED")
 		} else {
-			fmt.Printf("  └── [RESULT] FAILED\n")
+			fmt.Printf("FAILED (%d 条规则未通过)\n", len(judgement.Errors))
 			for _, e := range judgement.Errors {
-				fmt.Printf("      - %s\n", e)
+				fmt.Printf("    - %s\n", e)
 			}
-			fmt.Println()
 		}
 
 		rep.AddEntry(report.Entry{
@@ -246,6 +250,8 @@ func cmdTest(args []string) error {
 			Duration:     result.Duration,
 		})
 	}
+
+	fmt.Println("\n[STEP 4] 生成测试报告 ...")
 
 	reportName := fmt.Sprintf("report-%s", time.Now().Format("20060102-150405"))
 	jsonPath := filepath.Join(cfg.ReportsDir, reportName+".json")
