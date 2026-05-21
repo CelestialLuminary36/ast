@@ -59,7 +59,10 @@ func (r *APIRunner) Run(ctx context.Context, sk skill.Skill, sc scenario.Scenari
 	systemBlocks := []anthropic.TextBlockParam{
 		{Text: buildSystemPrompt(sk)},
 	}
-	tools := buildToolDefs()
+	tools, err := buildToolDefs(sk)
+	if err != nil {
+		return nil, fmt.Errorf("build tool defs: %w", err)
+	}
 
 	// 5. Conversation loop
 	messages := []anthropic.MessageParam{
@@ -194,49 +197,4 @@ func buildSystemPrompt(sk skill.Skill) string {
 	b.WriteString("\n--- End of Instructions ---\n\n")
 	b.WriteString(systemPromptFooter)
 	return b.String()
-}
-
-func buildToolDefs() []anthropic.ToolUnionParam {
-	return []anthropic.ToolUnionParam{
-		{OfTool: &anthropic.ToolParam{
-			Name:        "read_file",
-			Description: anthropic.String("Read the contents of a file in the workspace."),
-			InputSchema: anthropic.ToolInputSchemaParam{
-				Properties: map[string]any{
-					"path": map[string]string{"type": "string", "description": "Relative path to the file"},
-				},
-				Required: []string{"path"},
-			},
-		}},
-		{OfTool: &anthropic.ToolParam{
-			Name:        "edit_file",
-			Description: anthropic.String("Write or overwrite a file in the workspace with the given content."),
-			InputSchema: anthropic.ToolInputSchemaParam{
-				Properties: map[string]any{
-					"path":    map[string]string{"type": "string", "description": "Relative path to the file"},
-					"content": map[string]string{"type": "string", "description": "Full content to write"},
-				},
-				Required: []string{"path", "content"},
-			},
-		}},
-		{OfTool: &anthropic.ToolParam{
-			Name:        "run_command",
-			Description: anthropic.String("Run a shell command in the workspace. Dangerous commands are blocked by the sandbox."),
-			InputSchema: anthropic.ToolInputSchemaParam{
-				Properties: map[string]any{
-					"command": map[string]string{"type": "string", "description": "Shell command to execute"},
-				},
-				Required: []string{"command"},
-			},
-		}},
-		{OfTool: &anthropic.ToolParam{
-			Name:        "list_files",
-			Description: anthropic.String("List files in a workspace directory (default '.')."),
-			InputSchema: anthropic.ToolInputSchemaParam{
-				Properties: map[string]any{
-					"path": map[string]string{"type": "string", "description": "Relative directory path (optional)"},
-				},
-			},
-		}},
-	}
 }
