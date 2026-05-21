@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/CelestialLuminary36/agent-skill-test/internal/config"
@@ -51,9 +52,13 @@ func usage() {
 	fmt.Println(`ast - Agent Skill Tester
 
 Usage:
-  ast init                     Initialize a new project with ast.yaml and sample scenario
-  ast test <skill-dir>         Run scenarios against a skill directory
-  ast report <report.json>     Display a previously generated report`)
+  ast init                                Initialize a new project (ast.yaml + sample scenario)
+  ast test <skill-dir> [--runner=NAME]    Run scenarios against a skill directory
+                                          runner: mock | sandbox | api (default: ast.yaml default_runner)
+  ast report <report.json>                Display a previously generated report
+
+Environment:
+  ANTHROPIC_API_KEY                       API key for the 'api' runner (overrides api.key in ast.yaml)`)
 }
 
 // ---------- init ----------
@@ -123,10 +128,12 @@ assert:
 
 func cmdTest(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("missing skill directory\n\nUsage: ast test <skill-dir>")
+		return fmt.Errorf("missing skill directory\n\nUsage: ast test <skill-dir> [--runner=mock|sandbox|api]")
 	}
 
 	skillDir := args[0]
+	runnerOverride := parseRunnerFlag(args[1:])
+
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -151,10 +158,19 @@ func cmdTest(args []string) error {
 		}
 	}
 
+	runnerName := cfg.DefaultRunner
+	if runnerOverride != "" {
+		runnerName = runnerOverride
+	}
+	rnr, err := selectRunner(runnerName, cfg)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("[INFO] Loaded Skill: %s\n", sk.Name)
+	fmt.Printf("[INFO] Runner: %s\n", runnerName)
 	fmt.Printf("[INFO] Found %d scenario(s) to run...\n\n", len(scenarios))
 
-	rnr := runner.NewSandboxRunner()
 	jdg := judge.NewRuleJudge()
 
 	rep := &report.Report{
@@ -263,4 +279,30 @@ func loadConfig() (*config.Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+func parseRunnerFlag(args []string) string {
+	for _, a := range args {
+		if v, ok := strings.CutPrefix(a, "--runner="); ok {
+			return strings.TrimSpace(v)
+		}
+		if a == "--runner" {
+			// `--runner mock` form not supported here to keep parsing simple
+			fmt.Fprintln(os.Stderr, "warning: use --runner=NAME form (e.g. --runner=api)")
+		}
+	}
+	return ""
+}
+
+func selectRunner(name string, cfg *config.Config) (runner.Runner, error) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", "mock":
+		return runner.NewMockRunner(), nil
+	case "sandbox":
+		return runner.NewSandboxRunner(), nil
+	case "api":
+		return runner.NewAPIRunner(&cfg.API), nil
+	default:
+		return nil, fmt.Errorf("unknown runner %q (expected: mock | sandbox | api)", name)
+	}
 }

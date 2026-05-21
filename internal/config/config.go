@@ -7,10 +7,18 @@ import (
 )
 
 type Config struct {
-	Project       string `yaml:"project"`
-	ScenariosDir  string `yaml:"scenarios_dir"`
-	ReportsDir    string `yaml:"reports_dir"`
-	DefaultRunner string `yaml:"default_runner"`
+	Project       string     `yaml:"project"`
+	ScenariosDir  string     `yaml:"scenarios_dir"`
+	ReportsDir    string     `yaml:"reports_dir"`
+	DefaultRunner string     `yaml:"default_runner"`
+	API           APIConfig  `yaml:"api"`
+}
+
+type APIConfig struct {
+	Key      string `yaml:"key"`
+	Model    string `yaml:"model"`
+	Endpoint string `yaml:"endpoint"`
+	Timeout  int    `yaml:"timeout"` // seconds
 }
 
 func Default() *Config {
@@ -19,6 +27,11 @@ func Default() *Config {
 		ScenariosDir:  "./scenarios",
 		ReportsDir:    "./reports",
 		DefaultRunner: "mock",
+		API: APIConfig{
+			Model:    "claude-sonnet-4-6",
+			Endpoint: "https://api.anthropic.com/v1/messages",
+			Timeout:  120,
+		},
 	}
 }
 
@@ -39,6 +52,15 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.DefaultRunner == "" {
 		cfg.DefaultRunner = "mock"
+	}
+	if cfg.API.Model == "" {
+		cfg.API.Model = "claude-sonnet-4-6"
+	}
+	if cfg.API.Endpoint == "" {
+		cfg.API.Endpoint = "https://api.anthropic.com/v1/messages"
+	}
+	if cfg.API.Timeout <= 0 {
+		cfg.API.Timeout = 120
 	}
 	return &cfg, nil
 }
