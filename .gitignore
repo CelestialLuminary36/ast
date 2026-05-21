@@ -154,7 +154,6 @@ debug
 # =========================================================
 
 node_modules/
-docs/
 
 # AST runtime output
 ast.yaml
