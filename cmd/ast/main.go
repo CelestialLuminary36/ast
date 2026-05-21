@@ -312,6 +312,10 @@ func parseScenariosFlag(args []string) string {
 		if v, ok := strings.CutPrefix(a, "--scenarios="); ok {
 			return strings.TrimSpace(v)
 		}
+		if a == "--scenarios" {
+			// `--scenarios DIR` form not supported here to keep parsing simple
+			fmt.Fprintln(os.Stderr, "warning: use --scenarios=DIR form (e.g. --scenarios=./scenarios)")
+		}
 	}
 	return ""
 }
