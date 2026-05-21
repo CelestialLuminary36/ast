@@ -69,7 +69,7 @@ func cmdInit(_ []string) error {
 	}
 
 	cfg := config.Default()
-	if err := cfg.Save(configFile); err != nil {
+	if err := writeAnnotatedConfig(configFile, cfg); err != nil {
 		return err
 	}
 	fmt.Printf("Created %s\n", configFile)
@@ -120,7 +120,13 @@ assert:
 		return err
 	}
 	fmt.Printf("Created %s\n", reportsDir)
-	fmt.Println("\nProject initialized. Edit ast.yaml and add scenarios to", scenariosDir)
+
+	if err := scaffoldExampleSkill("./skills/example-skill"); err != nil {
+		return fmt.Errorf("scaffold example skill: %w", err)
+	}
+
+	fmt.Println("\nProject initialized.")
+	fmt.Println("  Set ANTHROPIC_API_KEY, then try: ast test ./skills/example-skill")
 	return nil
 }
 
@@ -167,6 +173,7 @@ func cmdTest(args []string) error {
 		return err
 	}
 
+	warnIfStubRunner(runnerName)
 	fmt.Printf("[INFO] Loaded Skill: %s\n", sk.Name)
 	fmt.Printf("[INFO] Runner: %s\n", runnerName)
 	fmt.Printf("[INFO] Found %d scenario(s) to run...\n\n", len(scenarios))
@@ -305,4 +312,79 @@ func selectRunner(name string, cfg *config.Config) (runner.Runner, error) {
 	default:
 		return nil, fmt.Errorf("unknown runner %q (expected: mock | sandbox | api)", name)
 	}
+}
+
+// warnIfStubRunner prints a loud warning when a non-agent runner is used.
+// mock and sandbox are keyword-matching stubs — their pass/fail signal cannot
+// be used to ship a skill.
+func warnIfStubRunner(name string) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "mock", "sandbox":
+		fmt.Fprintln(os.Stderr, "[WARN] ────────────────────────────────────────────────────────────")
+		fmt.Fprintf(os.Stderr, "[WARN] Runner %q does NOT invoke a real agent.\n", name)
+		fmt.Fprintln(os.Stderr, "[WARN] Pass/fail results CANNOT be used to validate skill compliance.")
+		fmt.Fprintln(os.Stderr, "[WARN] Use --runner=api (or set default_runner: api in ast.yaml) for")
+		fmt.Fprintln(os.Stderr, "[WARN] real behavior testing before treating any result as shippable.")
+		fmt.Fprintln(os.Stderr, "[WARN] ────────────────────────────────────────────────────────────")
+	}
+}
+
+func writeAnnotatedConfig(path string, cfg *config.Config) error {
+	body := fmt.Sprintf(`project: %s
+scenarios_dir: %s
+reports_dir: %s
+
+# Runner backend used by 'ast test'. Override per-invocation with --runner=NAME.
+#   api      — real Claude agent (only mode that can validate a skill for release)
+#   sandbox  — keyword-matching stub; framework smoke test only, NOT skill validation
+#   mock     — fixed-output stub; framework smoke test only, NOT skill validation
+default_runner: %s
+
+api:
+  key: %q            # leave empty to read ANTHROPIC_API_KEY
+  model: %s
+  endpoint: %s
+  timeout: %d        # seconds per scenario
+`,
+		cfg.Project, cfg.ScenariosDir, cfg.ReportsDir,
+		cfg.DefaultRunner,
+		cfg.API.Key, cfg.API.Model, cfg.API.Endpoint, cfg.API.Timeout,
+	)
+	return os.WriteFile(path, []byte(body), 0o644)
+}
+
+func scaffoldExampleSkill(dir string) error {
+	if _, err := os.Stat(dir); err == nil {
+		return nil // don't clobber existing
+	}
+	files := map[string]string{
+		"skill.yaml": `id: example-skill
+name: "Example Skill"
+description: "Minimal scaffold demonstrating ast's tools/ whitelist"
+version: "0.1.0"
+`,
+		"instructions.md": `You are an assistant operating in an isolated workspace.
+
+When the user asks you to inspect or modify files, use the provided
+tools. Do not execute shell commands — this skill does not grant
+run_command access.
+
+When done, reply with a short summary.
+`,
+		"tools/read_file.json": `{"name": "read_file"}
+`,
+		"tools/edit_file.json": `{"name": "edit_file"}
+`,
+	}
+	for rel, content := range files {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("Created %s\n", dir)
+	return nil
 }

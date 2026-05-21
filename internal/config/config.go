@@ -26,7 +26,7 @@ func Default() *Config {
 		Project:       "agent-skill-test",
 		ScenariosDir:  "./scenarios",
 		ReportsDir:    "./reports",
-		DefaultRunner: "mock",
+		DefaultRunner: "api",
 		API: APIConfig{
 			Model:    "claude-sonnet-4-6",
 			Endpoint: "https://api.anthropic.com/v1/messages",
@@ -51,7 +51,7 @@ func Load(path string) (*Config, error) {
 		cfg.ReportsDir = "./reports"
 	}
 	if cfg.DefaultRunner == "" {
-		cfg.DefaultRunner = "mock"
+		cfg.DefaultRunner = "api"
 	}
 	if cfg.API.Model == "" {
 		cfg.API.Model = "claude-sonnet-4-6"
