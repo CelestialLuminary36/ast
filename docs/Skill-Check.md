@@ -67,7 +67,7 @@ MVP 阶段必须保持极度聚焦，排斥过度设计，仅针对 **AI Coding 
 
 | **模块** | **功能项** | **描述** | **优先级** |
 | --- | --- | --- | --- |
-| **CLI 引擎** | 本地 CLI 分发 | 提供跨平台的命令行工具（如 `skillcheck`），支持本地执行。 | P0 |
+| **CLI 引擎** | 本地 CLI 分发 | 提供跨平台的命令行工具 `ast`（Agent Skill Tester），支持本地执行。完整命令参考 [../README.md](../README.md#commands)。 | P0 |
 | **Skill 规范** | 统一 Skill 目录结构 | 定义标准的 Skill 暴露格式，以便对接不同的底层 Agent。 | P0 |
 | **场景层 (DSL)** | YAML 场景声明 | 支持配置初始 Fixture、用户输入、文件修改黑白名单、必含/忌含命令。 | P0 |
 | **运行层 (Runner)** | Git-based 虚拟沙盒 | 基于本地文件系统与 Git Rollback，低成本模拟干净的隔离工作区。 | P0 |
@@ -200,7 +200,7 @@ type TestResult struct {
 ### 6.1 虚拟沙盒与行为捕获（无痛解法）
 
 - **痛点：** 每次测试都起 Docker 太重，无法高频跑。
-- **MVP 方案：** 利用 **Git 本地工作区**。Runner 每次执行前，将 `fixture_dir` 拷贝到一个系统的全局临时目录（如 `/tmp/skillcheck/run-xxx`），并在该目录执行 `git init && git add . && git commit`。Agent 执行完毕后，Runner 直接通过 `git status --porcelain` 和 `git diff` 获取精准的文件变动列表，判定完后整个物理删除临时目录。
+- **MVP 方案：** 利用 **Git 本地工作区**。Runner 每次执行前，将 `fixture_dir` 拷贝到一个系统的全局临时目录（如 `/tmp/ast/run-xxx`），并在该目录执行 `git init && git add . && git commit`。Agent 执行完毕后，Runner 直接通过 `git status --porcelain` 和 `git diff` 获取精准的文件变动列表，判定完后整个物理删除临时目录。
 
 ### 6.2 命令审计劫持（Command Audit）
 
@@ -212,7 +212,7 @@ type TestResult struct {
 用户在终端键入命令，框架按部就班地输出行为审计日志。
 
 ```bash
-$ skillcheck run --skill ./skills/go-reviewer --scenarios ./scenarios/go/
+$ ast test ./skills/go-reviewer --scenarios=./scenarios/go/
 
 [INFO] Loaded Skill: go-reviewer (v1.0.0)
 [INFO] Found 3 scenarios to run...

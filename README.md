@@ -101,7 +101,8 @@ For each scenario the runner:
 ## Commands
 
 ```
-ast init                                Initialize project (ast.yaml + sample scenario)
-ast test <skill-dir> [--runner=NAME]    Run scenarios; runner overrides default_runner
-ast report <report.json>                Re-print a previously generated report
+ast init                                              Initialize project (ast.yaml + sample scenario)
+ast test <skill-dir> [--runner=NAME] [--scenarios=DIR]
+                                                      Run scenarios; flags override ast.yaml defaults
+ast report <report.json>                              Re-print a previously generated report
 ```
