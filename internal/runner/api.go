@@ -171,6 +171,19 @@ func (r *APIRunner) prepareWorkspace(ctx context.Context, sc scenario.Scenario, 
 	return nil
 }
 
+// normalizeEndpointForBaseURL converts a user-configured Messages API URL into
+// the base URL the anthropic-sdk-go expects. The SDK appends "/v1/messages"
+// internally, so we strip that suffix from the input if present and always
+// guarantee a trailing slash.
+func normalizeEndpointForBaseURL(endpoint string) string {
+	s := strings.TrimSuffix(endpoint, "/")
+	s = strings.TrimSuffix(s, "/v1/messages")
+	if s == "" {
+		return "/"
+	}
+	return s + "/"
+}
+
 func (r *APIRunner) buildClient() (anthropic.Client, error) {
 	apiKey := r.cfg.Key
 	if apiKey == "" {
@@ -182,9 +195,7 @@ func (r *APIRunner) buildClient() (anthropic.Client, error) {
 
 	opts := []option.RequestOption{option.WithAPIKey(apiKey)}
 	if r.cfg.Endpoint != "" && r.cfg.Endpoint != defaultAPIEndpoint {
-		// Strip trailing "/messages" if present — SDK appends it.
-		base := strings.TrimSuffix(strings.TrimSuffix(r.cfg.Endpoint, "/messages"), "/")
-		opts = append(opts, option.WithBaseURL(base+"/"))
+		opts = append(opts, option.WithBaseURL(normalizeEndpointForBaseURL(r.cfg.Endpoint)))
 	}
 	return anthropic.NewClient(opts...), nil
 }
