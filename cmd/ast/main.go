@@ -195,14 +195,19 @@ func cmdTest(args []string) error {
 
 	ctx := context.Background()
 	for _, sc := range scenarios {
-		ws, err := workspace.New("")
-		if err != nil {
-			return fmt.Errorf("create workspace: %w", err)
-		}
-
 		fmt.Printf("\n=== 场景: %s ===\n", sc.ID)
 		fmt.Printf("[STEP 1] 初始化 Git 隔离沙盒 ... ")
-		// workspace.New 已在循环顶部完成
+		ws, err := workspace.New("")
+		if err != nil {
+			fmt.Printf("FAILED: %v\n", err)
+			rep.AddEntry(report.Entry{
+				ScenarioID: sc.ID,
+				Passed:     false,
+				Errors:     []string{fmt.Sprintf("workspace init: %v", err)},
+			})
+			fmt.Printf("[RESULT] %s ERROR\n", sc.ID)
+			continue
+		}
 		fmt.Println("SUCCESS")
 
 		fmt.Printf("[STEP 2] 调用 Agent (%s) ... ", runnerName)
@@ -215,6 +220,7 @@ func cmdTest(args []string) error {
 				Passed:     false,
 				Errors:     []string{fmt.Sprintf("run error: %v", runErr)},
 			})
+			fmt.Printf("[RESULT] %s ERROR\n", sc.ID)
 			continue
 		}
 		fmt.Printf("SUCCESS (耗时 %s)\n", result.Duration.Round(time.Millisecond))
@@ -229,15 +235,18 @@ func cmdTest(args []string) error {
 				Output:     result.Output,
 				Errors:     []string{fmt.Sprintf("judge error: %v", err)},
 			})
+			fmt.Printf("[RESULT] %s ERROR\n", sc.ID)
 			continue
 		}
 		if judgement.Passed {
 			fmt.Println("PASSED")
+			fmt.Printf("[RESULT] %s PASSED\n", sc.ID)
 		} else {
 			fmt.Printf("FAILED (%d 条规则未通过)\n", len(judgement.Errors))
 			for _, e := range judgement.Errors {
 				fmt.Printf("    - %s\n", e)
 			}
+			fmt.Printf("[RESULT] %s FAILED\n", sc.ID)
 		}
 
 		rep.AddEntry(report.Entry{
