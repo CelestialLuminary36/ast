@@ -53,8 +53,10 @@ func usage() {
 
 Usage:
   ast init                                Initialize a new project (ast.yaml + sample scenario)
-  ast test <skill-dir> [--runner=NAME]    Run scenarios against a skill directory
-                                          runner: mock | sandbox | api (default: ast.yaml default_runner)
+  ast test <skill-dir> [--runner=NAME] [--scenarios=DIR]
+                                          Run scenarios against a skill directory
+                                          --runner:    mock | sandbox | api (default: ast.yaml default_runner)
+                                          --scenarios: override scenarios_dir from ast.yaml
   ast report <report.json>                Display a previously generated report
 
 Environment:
@@ -150,12 +152,16 @@ func cmdTest(args []string) error {
 		return fmt.Errorf("load skill: %w", err)
 	}
 
-	scenarios, err := scenario.LoadFromDir(cfg.ScenariosDir)
+	scenariosDir := cfg.ScenariosDir
+	if override := parseScenariosFlag(args[1:]); override != "" {
+		scenariosDir = override
+	}
+	scenarios, err := scenario.LoadFromDir(scenariosDir)
 	if err != nil {
 		return fmt.Errorf("load scenarios: %w", err)
 	}
 	if len(scenarios) == 0 {
-		return fmt.Errorf("no scenarios found in %s", cfg.ScenariosDir)
+		return fmt.Errorf("no scenarios found in %s", scenariosDir)
 	}
 
 	for i := range scenarios {
@@ -296,6 +302,15 @@ func parseRunnerFlag(args []string) string {
 		if a == "--runner" {
 			// `--runner mock` form not supported here to keep parsing simple
 			fmt.Fprintln(os.Stderr, "warning: use --runner=NAME form (e.g. --runner=api)")
+		}
+	}
+	return ""
+}
+
+func parseScenariosFlag(args []string) string {
+	for _, a := range args {
+		if v, ok := strings.CutPrefix(a, "--scenarios="); ok {
+			return strings.TrimSpace(v)
 		}
 	}
 	return ""
