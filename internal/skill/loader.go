@@ -1,8 +1,11 @@
 package skill
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -65,19 +68,36 @@ func LoadFromDir(dir string) (*Skill, error) {
 		}
 	}
 
-	// Load tools directory if exists
+	// Load tools/*.json into ToolDefs. Each file must be one Anthropic-format tool definition.
 	toolsDir := filepath.Join(dir, "tools")
-	if info, err := os.Stat(toolsDir); err == nil && info.IsDir() {
-		// For MVP, we just note that tools exist; full parsing is future work
-		entries, _ := os.ReadDir(toolsDir)
-		var toolNames []string
-		for _, e := range entries {
-			if !e.IsDir() {
-				toolNames = append(toolNames, e.Name())
-			}
+	toolsInfo, toolsErr := os.Stat(toolsDir)
+	if toolsErr == nil && toolsInfo.IsDir() {
+		entries, err := os.ReadDir(toolsDir)
+		if err != nil {
+			return nil, fmt.Errorf("read tools dir: %w", err)
 		}
-		if len(toolNames) > 0 {
-			s.Meta["tools"] = toolNames
+		var names []string
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+				continue
+			}
+			p := filepath.Join(toolsDir, e.Name())
+			data, err := os.ReadFile(p)
+			if err != nil {
+				return nil, fmt.Errorf("read %s: %w", p, err)
+			}
+			var td ToolDef
+			if err := json.Unmarshal(data, &td); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", p, err)
+			}
+			if td.Name == "" {
+				return nil, fmt.Errorf("%s: tool definition is missing required field 'name'", p)
+			}
+			s.ToolDefs = append(s.ToolDefs, td)
+			names = append(names, td.Name)
+		}
+		if len(names) > 0 {
+			s.Meta["tools"] = names
 		}
 	}
 
