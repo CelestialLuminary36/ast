@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.44.1
+	github.com/bmatcuk/doublestar/v4 v4.10.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

@@ -2,11 +2,11 @@ package judge
 
 import (
 	"fmt"
-	"path"
 	"strings"
 
 	"github.com/CelestialLuminary36/agent-skill-test/internal/runner"
 	"github.com/CelestialLuminary36/agent-skill-test/internal/scenario"
+	"github.com/bmatcuk/doublestar/v4"
 )
 
 type RuleJudge struct{}
@@ -125,28 +125,13 @@ func (j *Judgement) append(other *Judgement) {
 	j.Errors = append(j.Errors, other.Errors...)
 }
 
-// matchGlob performs simple glob matching supporting * and **.
-// ** matches any number of directory segments.
+// matchGlob performs glob matching with full support for ** segment expansion,
+// delegating to doublestar/v4. Slashes are normalized to forward slashes so
+// Windows-style paths in `git status` output match POSIX-style patterns in
+// scenario YAML.
 func matchGlob(pattern, s string) bool {
-	// Normalize separators
 	pattern = strings.ReplaceAll(pattern, "\\", "/")
 	s = strings.ReplaceAll(s, "\\", "/")
-
-	// Handle ** patterns by converting to a simple prefix/suffix check
-	if strings.Contains(pattern, "**") {
-		parts := strings.Split(pattern, "**")
-		if len(parts) == 2 {
-			prefix := parts[0]
-			suffix := parts[1]
-			if strings.HasPrefix(s, prefix) && strings.HasSuffix(s, suffix) {
-				// Ensure the middle part is valid (no prefix/suffix overlap issues for simple cases)
-				return true
-			}
-		}
-		// Fallback: treat ** as * for path.Match
-		pattern = strings.ReplaceAll(pattern, "**", "*")
-	}
-
-	matched, _ := path.Match(pattern, s)
-	return matched
+	ok, _ := doublestar.PathMatch(pattern, s)
+	return ok
 }
