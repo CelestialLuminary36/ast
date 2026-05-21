@@ -37,7 +37,7 @@ func (r *SandboxRunner) Run(ctx context.Context, sk skill.Skill, sc scenario.Sce
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return nil, fmt.Errorf("init script failed: %w\noutput: %s", err, out)
 		}
-		cmds = append(cmds, sc.Environment.InitScript)
+		// (no append to cmds — init_script is framework setup, not agent behavior)
 	}
 
 	// 3. Ensure git repo for diff tracking
