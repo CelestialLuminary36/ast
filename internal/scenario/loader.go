@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +47,26 @@ func LoadFromDir(dir string) ([]Scenario, error) {
 	return scenarios, nil
 }
 
+// LoadFromFile reads a single scenario from a YAML file.
+func LoadFromFile(path string) (Scenario, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Scenario{}, err
+	}
+	var s Scenario
+	if err := yaml.Unmarshal(data, &s); err != nil {
+		return Scenario{}, fmt.Errorf("parse %s: %w", path, err)
+	}
+	name := filepath.Base(path)
+	if s.ID == "" {
+		s.ID = strings.TrimSuffix(name, filepath.Ext(name))
+	}
+	if s.Name == "" {
+		s.Name = s.ID
+	}
+	return s, nil
+}
+
 func Validate(s Scenario) error {
 	if s.ID == "" {
 		return fmt.Errorf("scenario id is required")
@@ -54,4 +75,19 @@ func Validate(s Scenario) error {
 		return fmt.Errorf("scenario %s: input.user_prompt is required", s.ID)
 	}
 	return nil
+}
+
+// Parse reads a single scenario from a YAML reader.
+func Parse(r io.Reader) (Scenario, error) {
+	var s Scenario
+	if err := yaml.NewDecoder(r).Decode(&s); err != nil {
+		return Scenario{}, fmt.Errorf("parse scenario: %w", err)
+	}
+	if s.ID == "" {
+		s.ID = "default"
+	}
+	if s.Name == "" {
+		s.Name = s.ID
+	}
+	return s, nil
 }

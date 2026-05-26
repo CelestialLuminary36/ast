@@ -7,11 +7,11 @@ import (
 )
 
 type Config struct {
-	Project       string     `yaml:"project"`
-	ScenariosDir  string     `yaml:"scenarios_dir"`
-	ReportsDir    string     `yaml:"reports_dir"`
-	DefaultRunner string     `yaml:"default_runner"`
-	API           APIConfig  `yaml:"api"`
+	Project      string         `yaml:"project"`
+	ScenariosDir string         `yaml:"scenarios_dir"`
+	ReportsDir   string         `yaml:"reports_dir"`
+	API          APIConfig      `yaml:"api"`
+	Provider     ProviderConfig `yaml:"provider"`
 }
 
 type APIConfig struct {
@@ -21,12 +21,50 @@ type APIConfig struct {
 	Timeout  int    `yaml:"timeout"` // seconds
 }
 
+type ProviderConfig struct {
+	Type     string `yaml:"type"` // "anthropic", "openai", "ollama"
+	Key      string `yaml:"key"`
+	Model    string `yaml:"model"`
+	Endpoint string `yaml:"endpoint"`
+	Timeout  int    `yaml:"timeout"` // seconds
+}
+
+// ResolveProvider merges the new provider: section and the deprecated api:
+// section. If provider.type is set, it takes precedence. Otherwise the legacy
+// api: fields are mapped to an anthropic provider for backward compatibility.
+func (c *Config) ResolveProvider() ProviderConfig {
+	if c.Provider.Type != "" {
+		pc := c.Provider
+		if pc.Timeout <= 0 {
+			pc.Timeout = 120
+		}
+		return pc
+	}
+	// Backward compat: api: section → anthropic provider
+	pc := ProviderConfig{
+		Type:     "anthropic",
+		Key:      c.API.Key,
+		Model:    c.API.Model,
+		Endpoint: c.API.Endpoint,
+		Timeout:  c.API.Timeout,
+	}
+	if pc.Model == "" {
+		pc.Model = "claude-sonnet-4-6"
+	}
+	if pc.Endpoint == "" {
+		pc.Endpoint = "https://api.anthropic.com/v1/messages"
+	}
+	if pc.Timeout <= 0 {
+		pc.Timeout = 120
+	}
+	return pc
+}
+
 func Default() *Config {
 	return &Config{
-		Project:       "agent-skill-test",
-		ScenariosDir:  "./scenarios",
-		ReportsDir:    "./reports",
-		DefaultRunner: "api",
+		Project:      "agent-skill-test",
+		ScenariosDir: "./scenarios",
+		ReportsDir:   "./reports",
 		API: APIConfig{
 			Model:    "claude-sonnet-4-6",
 			Endpoint: "https://api.anthropic.com/v1/messages",
@@ -49,9 +87,6 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.ReportsDir == "" {
 		cfg.ReportsDir = "./reports"
-	}
-	if cfg.DefaultRunner == "" {
-		cfg.DefaultRunner = "api"
 	}
 	if cfg.API.Model == "" {
 		cfg.API.Model = "claude-sonnet-4-6"

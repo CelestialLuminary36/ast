@@ -2,145 +2,126 @@ package runner
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
-
 	"github.com/CelestialLuminary36/agent-skill-test/internal/config"
+	"github.com/CelestialLuminary36/agent-skill-test/internal/provider"
 	"github.com/CelestialLuminary36/agent-skill-test/internal/scenario"
 	"github.com/CelestialLuminary36/agent-skill-test/internal/skill"
 )
 
 const (
-	defaultMaxRounds    = 30
-	defaultMaxTokens    = 4096
-	defaultAPIEndpoint  = "https://api.anthropic.com/v1/messages"
-	systemPromptHeader  = "You are an AI agent operating in an isolated, sandboxed workspace."
-	systemPromptFooter  = "Use the provided tools to inspect and modify the workspace. " +
+	defaultMaxRounds = 30
+	defaultMaxTokens = 4096
+
+	systemPromptHeader = "You are an AI agent operating in an isolated, sandboxed workspace."
+	systemPromptFooter = "Use the provided tools to inspect and modify the workspace. " +
 		"When the task is complete, stop calling tools and reply with a short summary of what you did."
 )
 
-type APIRunner struct {
-	cfg *config.APIConfig
+// LLMRunner drives a skill test via any Provider backend.
+type LLMRunner struct {
+	p   provider.Provider
+	cfg config.ProviderConfig
 }
 
-func NewAPIRunner(cfg *config.APIConfig) *APIRunner {
-	return &APIRunner{cfg: cfg}
+// NewLLMRunner creates a runner backed by the given provider.
+func NewLLMRunner(p provider.Provider, cfg config.ProviderConfig) *LLMRunner {
+	return &LLMRunner{p: p, cfg: cfg}
 }
 
-func (r *APIRunner) Run(ctx context.Context, sk skill.Skill, sc scenario.Scenario, ws string) (*RunResult, error) {
+func (r *LLMRunner) Run(ctx context.Context, sk skill.Skill, sc scenario.Scenario, ws string) (*RunResult, error) {
 	start := time.Now()
 
-	// 1. Prepare workspace + git baseline
-	if err := r.prepareWorkspace(ctx, sc, ws); err != nil {
+	if err := prepareWorkspace(ctx, sc, ws); err != nil {
 		return nil, err
 	}
 
-	// 2. Build client
-	client, err := r.buildClient()
+	tools, err := provider.BuildToolList(sk)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build tool list: %w", err)
 	}
 
-	// 3. Apply scenario timeout if set, else use config default
+	systemPrompt := buildSystemPrompt(sk)
+
 	if r.cfg.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(r.cfg.Timeout)*time.Second)
 		defer cancel()
 	}
 
-	// 4. Build system + tools
-	systemBlocks := []anthropic.TextBlockParam{
-		{Text: buildSystemPrompt(sk)},
-	}
-	tools, err := buildToolDefs(sk)
-	if err != nil {
-		return nil, fmt.Errorf("build tool defs: %w", err)
-	}
-
-	// 5. Conversation loop
-	messages := []anthropic.MessageParam{
-		anthropic.NewUserMessage(anthropic.NewTextBlock(sc.Input.UserPrompt)),
-	}
 	executor := NewToolExecutor(ws)
 
-	model := r.cfg.Model
-	if model == "" {
-		model = anthropic.ModelClaudeSonnet4_6
-	}
+	var messages []provider.Message
+	messages = append(messages, provider.Message{
+		Role: "user",
+		Content: []provider.ContentBlock{
+			{Type: "text", Text: sc.Input.UserPrompt},
+		},
+	})
 
 	var finalOutput string
-	maxRounds := defaultMaxRounds
 
-	for round := range maxRounds {
-		resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-			Model:     model,
-			MaxTokens: int64(defaultMaxTokens),
-			System:    systemBlocks,
-			Messages:  messages,
-			Tools:     tools,
+	for round := range defaultMaxRounds {
+		resp, err := r.p.Send(ctx, provider.Request{
+			SystemPrompt: systemPrompt,
+			Messages:     messages,
+			Tools:        tools,
+			MaxTokens:    defaultMaxTokens,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("api call round %d: %w", round+1, err)
 		}
 
-		// Parse response blocks into text + tool calls
-		var textParts []string
-		var toolCalls []anthropic.ToolUseBlock
-		for _, block := range resp.Content {
-			switch v := block.AsAny().(type) {
-			case anthropic.TextBlock:
-				if strings.TrimSpace(v.Text) != "" {
-					textParts = append(textParts, v.Text)
-				}
-			case anthropic.ToolUseBlock:
-				toolCalls = append(toolCalls, v)
-			}
+		if len(resp.ToolCalls) == 0 {
+			finalOutput = strings.Join(resp.TextBlocks, "\n")
+			break
 		}
-
-		// Terminal: model didn't request any tool use
-		if len(toolCalls) == 0 || resp.StopReason == anthropic.StopReasonEndTurn {
-			if len(textParts) > 0 {
-				finalOutput = strings.Join(textParts, "\n")
+		if resp.StopReason == "end_turn" || resp.StopReason == "stop" {
+			if len(resp.TextBlocks) > 0 {
+				finalOutput = strings.Join(resp.TextBlocks, "\n")
 			}
-			if len(toolCalls) == 0 {
+			if len(resp.ToolCalls) == 0 {
 				break
 			}
 		}
 
-		// Append assistant turn (text + tool_use blocks) to history
-		var assistantBlocks []anthropic.ContentBlockParamUnion
-		for _, t := range textParts {
-			assistantBlocks = append(assistantBlocks, anthropic.NewTextBlock(t))
+		// Build assistant message
+		var assistantBlocks []provider.ContentBlock
+		for _, t := range resp.TextBlocks {
+			assistantBlocks = append(assistantBlocks, provider.ContentBlock{Type: "text", Text: t})
 		}
-		for _, tc := range toolCalls {
-			var input any
-			if len(tc.Input) > 0 {
-				_ = json.Unmarshal(tc.Input, &input)
-			}
-			assistantBlocks = append(assistantBlocks, anthropic.NewToolUseBlock(tc.ID, input, tc.Name))
+		for _, tc := range resp.ToolCalls {
+			assistantBlocks = append(assistantBlocks, provider.ContentBlock{
+				Type:      "tool_use",
+				ToolID:    tc.ID,
+				ToolName:  tc.Name,
+				ToolInput: tc.Input,
+			})
 		}
-		messages = append(messages, anthropic.NewAssistantMessage(assistantBlocks...))
+		messages = append(messages, provider.Message{
+				Role:             "assistant",
+				Content:          assistantBlocks,
+				ReasoningContent: resp.ReasoningContent,
+			})
 
-		// Execute tools, then append the results as the next user turn
-		var resultBlocks []anthropic.ContentBlockParamUnion
-		for _, tc := range toolCalls {
-			var args map[string]any
-			_ = json.Unmarshal(tc.Input, &args)
-			result := executor.Execute(tc.Name, args)
-			payload, _ := json.Marshal(result)
-			resultBlocks = append(resultBlocks, anthropic.NewToolResultBlock(tc.ID, string(payload), result.Type == "error"))
+		// Execute tools and build user message with results
+		var resultBlocks []provider.ContentBlock
+		for _, tc := range resp.ToolCalls {
+			result := executor.Execute(tc.Name, tc.Input)
+			resultBlocks = append(resultBlocks, provider.ContentBlock{
+				Type:       "tool_result",
+				ToolID:     tc.ID,
+				ToolOutput: result.Content,
+				IsError:    result.Type == "error",
+			})
 		}
-		messages = append(messages, anthropic.NewUserMessage(resultBlocks...))
+		messages = append(messages, provider.Message{Role: "user", Content: resultBlocks})
 	}
 
-	// 6. Capture mutations via git diff
+	// Capture mutations via git diff
 	mutatedFiles, _ := captureMutations(ctx, ws)
 
 	return &RunResult{
@@ -150,54 +131,6 @@ func (r *APIRunner) Run(ctx context.Context, sk skill.Skill, sc scenario.Scenari
 		MutatedFiles: mutatedFiles,
 		Duration:     time.Since(start),
 	}, nil
-}
-
-func (r *APIRunner) prepareWorkspace(ctx context.Context, sc scenario.Scenario, ws string) error {
-	if sc.Environment.FixtureDir != "" {
-		if err := copyDir(sc.Environment.FixtureDir, ws); err != nil {
-			return fmt.Errorf("copy fixture: %w", err)
-		}
-	}
-	if sc.Environment.InitScript != "" {
-		cmd := exec.CommandContext(ctx, "sh", "-c", sc.Environment.InitScript)
-		cmd.Dir = ws
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("init script: %w\n%s", err, out)
-		}
-	}
-	_ = runGit(ctx, ws, "init")
-	_ = runGit(ctx, ws, "add", ".")
-	_ = runGit(ctx, ws, "commit", "-m", "init", "--allow-empty")
-	return nil
-}
-
-// normalizeEndpointForBaseURL converts a user-configured Messages API URL into
-// the base URL the anthropic-sdk-go expects. The SDK appends "/v1/messages"
-// internally, so we strip that suffix from the input if present and always
-// guarantee a trailing slash.
-func normalizeEndpointForBaseURL(endpoint string) string {
-	s := strings.TrimSuffix(endpoint, "/")
-	s = strings.TrimSuffix(s, "/v1/messages")
-	if s == "" {
-		return "/"
-	}
-	return s + "/"
-}
-
-func (r *APIRunner) buildClient() (anthropic.Client, error) {
-	apiKey := r.cfg.Key
-	if apiKey == "" {
-		apiKey = os.Getenv("ANTHROPIC_API_KEY")
-	}
-	if apiKey == "" {
-		return anthropic.Client{}, fmt.Errorf("missing API key: set api.key in ast.yaml or ANTHROPIC_API_KEY env var")
-	}
-
-	opts := []option.RequestOption{option.WithAPIKey(apiKey)}
-	if r.cfg.Endpoint != "" && r.cfg.Endpoint != defaultAPIEndpoint {
-		opts = append(opts, option.WithBaseURL(normalizeEndpointForBaseURL(r.cfg.Endpoint)))
-	}
-	return anthropic.NewClient(opts...), nil
 }
 
 func buildSystemPrompt(sk skill.Skill) string {

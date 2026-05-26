@@ -10,6 +10,7 @@ import (
 
 	"github.com/CelestialLuminary36/agent-skill-test/internal/config"
 	"github.com/CelestialLuminary36/agent-skill-test/internal/judge"
+	"github.com/CelestialLuminary36/agent-skill-test/internal/provider"
 	"github.com/CelestialLuminary36/agent-skill-test/internal/report"
 	"github.com/CelestialLuminary36/agent-skill-test/internal/runner"
 	"github.com/CelestialLuminary36/agent-skill-test/internal/scenario"
@@ -18,6 +19,28 @@ import (
 )
 
 const configFile = "ast.yaml"
+
+// embeddedDefaultScenario is used when no scenario files are found.
+const embeddedDefaultScenario = `id: default
+name: "默认场景"
+description: "验证 Agent 是否能根据用户提示创建文件"
+environment:
+  fixture_dir: ""
+  init_script: ""
+input:
+  user_prompt: "Create a file named hello.txt with the content 'hello world'"
+assert:
+  file_mutations:
+    allowed:
+      - "hello.txt"
+  command_execution:
+    must_have: []
+    must_not_have:
+      - contains: "rm -rf"
+  output_text:
+    must_include:
+      - "hello"
+`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -52,15 +75,15 @@ func usage() {
 	fmt.Println(`ast - Agent Skill Tester
 
 Usage:
-  ast init                                Initialize a new project (ast.yaml + sample scenario)
-  ast test <skill-dir> [--runner=NAME] [--scenarios=DIR]
-                                          Run scenarios against a skill directory
-                                          --runner:    mock | sandbox | api (default: ast.yaml default_runner)
-                                          --scenarios: override scenarios_dir from ast.yaml
-  ast report <report.json>                Display a previously generated report
+  ast init                         Generate ast.yaml (optional)
+  ast test <skill-dir>             Run scenarios against a skill directory
+                                   (looks for scenarios/ inside the skill dir first)
+  ast report <report.json>         Display a previously generated report
 
 Environment:
-  ANTHROPIC_API_KEY                       API key for the 'api' runner (overrides api.key in ast.yaml)`)
+  ANTHROPIC_API_KEY                API key for the anthropic provider
+  OPENAI_API_KEY                   API key for the openai provider
+  OLLAMA_API_KEY                   API key for the ollama provider (optional, Ollama is local)`)
 }
 
 // ---------- init ----------
@@ -128,7 +151,8 @@ assert:
 	}
 
 	fmt.Println("\nProject initialized.")
-	fmt.Println("  Set ANTHROPIC_API_KEY, then try: ast test ./skills/example-skill")
+	fmt.Println("  Set ANTHROPIC_API_KEY (or configure another provider in ast.yaml), then try:")
+	fmt.Println("  ast test ./skills/example-skill")
 	return nil
 }
 
@@ -136,32 +160,28 @@ assert:
 
 func cmdTest(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("missing skill directory\n\nUsage: ast test <skill-dir> [--runner=mock|sandbox|api]")
+		return fmt.Errorf("missing skill directory\n\nUsage: ast test <skill-dir>")
 	}
 
 	skillDir := args[0]
-	runnerOverride := parseRunnerFlag(args[1:])
 
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
+	cfg := loadConfigOrDefault()
 
 	sk, err := skill.LoadFromDir(skillDir)
 	if err != nil {
 		return fmt.Errorf("load skill: %w", err)
 	}
 
-	scenariosDir := cfg.ScenariosDir
+	// Default: look for scenarios/ inside the skill directory first,
+	// fall back to the global scenarios_dir from config.
+	scenariosDir := filepath.Join(skillDir, "scenarios")
 	if override := parseScenariosFlag(args[1:]); override != "" {
 		scenariosDir = override
 	}
-	scenarios, err := scenario.LoadFromDir(scenariosDir)
-	if err != nil {
-		return fmt.Errorf("load scenarios: %w", err)
-	}
+	scenarios := loadScenarios(scenariosDir)
 	if len(scenarios) == 0 {
-		return fmt.Errorf("no scenarios found in %s", scenariosDir)
+		// Fall back to global scenarios dir
+		scenarios = loadScenarios(cfg.ScenariosDir)
 	}
 
 	for i := range scenarios {
@@ -170,19 +190,16 @@ func cmdTest(args []string) error {
 		}
 	}
 
-	runnerName := cfg.DefaultRunner
-	if runnerOverride != "" {
-		runnerName = runnerOverride
-	}
-	rnr, err := selectRunner(runnerName, cfg)
+	pc := cfg.ResolveProvider()
+	p, err := newProviderFromConfig(pc)
 	if err != nil {
 		return err
 	}
+	rnr := runner.NewLLMRunner(p, pc)
 
-	warnIfStubRunner(runnerName)
-	fmt.Printf("[INFO] Loaded Skill: %s\n", sk.Name)
-	fmt.Printf("[INFO] Runner: %s\n", runnerName)
-	fmt.Printf("[INFO] Found %d scenario(s) to run...\n\n", len(scenarios))
+	fmt.Printf("[INFO] Skill: %s\n", sk.Name)
+	fmt.Printf("[INFO] Provider: %s (%s)\n", pc.Type, pc.Model)
+	fmt.Printf("[INFO] %d scenario(s) to run...\n\n", len(scenarios))
 
 	jdg := judge.NewRuleJudge()
 
@@ -210,7 +227,7 @@ func cmdTest(args []string) error {
 		}
 		fmt.Println("SUCCESS")
 
-		fmt.Printf("[STEP 2] 调用 Agent (%s) ... ", runnerName)
+		fmt.Printf("[STEP 2] 调用 Agent ... ")
 		result, runErr := rnr.Run(ctx, *sk, sc, ws.Root)
 		ws.Cleanup()
 		if runErr != nil {
@@ -262,9 +279,14 @@ func cmdTest(args []string) error {
 
 	fmt.Println("\n[STEP 4] 生成测试报告 ...")
 
+	reportsDir := cfg.ReportsDir
+	if err := os.MkdirAll(reportsDir, 0755); err != nil {
+		return fmt.Errorf("create reports dir: %w", err)
+	}
+
 	reportName := fmt.Sprintf("report-%s", time.Now().Format("20060102-150405"))
-	jsonPath := filepath.Join(cfg.ReportsDir, reportName+".json")
-	mdPath := filepath.Join(cfg.ReportsDir, reportName+".md")
+	jsonPath := filepath.Join(reportsDir, reportName+".json")
+	mdPath := filepath.Join(reportsDir, reportName+".md")
 
 	if err := report.Save(jsonPath, rep); err != nil {
 		return fmt.Errorf("save json report: %w", err)
@@ -298,28 +320,40 @@ func cmdReport(args []string) error {
 
 // ---------- helpers ----------
 
-func loadConfig() (*config.Config, error) {
+func loadConfigOrDefault() *config.Config {
 	cfg, err := config.Load(configFile)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%s not found. Run 'ast init' first", configFile)
-		}
-		return nil, err
+		return config.Default()
 	}
-	return cfg, nil
+	return cfg
 }
 
-func parseRunnerFlag(args []string) string {
-	for _, a := range args {
-		if v, ok := strings.CutPrefix(a, "--runner="); ok {
-			return strings.TrimSpace(v)
-		}
-		if a == "--runner" {
-			// `--runner mock` form not supported here to keep parsing simple
-			fmt.Fprintln(os.Stderr, "warning: use --runner=NAME form (e.g. --runner=api)")
-		}
+func loadScenarios(path string) []scenario.Scenario {
+	info, err := os.Stat(path)
+	if err != nil {
+		return defaultScenario()
 	}
-	return ""
+	if info.IsDir() {
+		scenarios, err := scenario.LoadFromDir(path)
+		if err != nil || len(scenarios) == 0 {
+			return defaultScenario()
+		}
+		return scenarios
+	}
+	// Single file
+	sc, err := scenario.LoadFromFile(path)
+	if err != nil {
+		return defaultScenario()
+	}
+	return []scenario.Scenario{sc}
+}
+
+func defaultScenario() []scenario.Scenario {
+	sc, err := scenario.Parse(strings.NewReader(embeddedDefaultScenario))
+	if err != nil {
+		return nil
+	}
+	return []scenario.Scenario{sc}
 }
 
 func parseScenariosFlag(args []string) string {
@@ -328,68 +362,48 @@ func parseScenariosFlag(args []string) string {
 			return strings.TrimSpace(v)
 		}
 		if a == "--scenarios" {
-			// `--scenarios DIR` form not supported here to keep parsing simple
 			fmt.Fprintln(os.Stderr, "warning: use --scenarios=DIR form (e.g. --scenarios=./scenarios)")
 		}
 	}
 	return ""
 }
 
-func selectRunner(name string, cfg *config.Config) (runner.Runner, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "", "mock":
-		return runner.NewMockRunner(), nil
-	case "sandbox":
-		return runner.NewSandboxRunner(), nil
-	case "api":
-		return runner.NewAPIRunner(&cfg.API), nil
+func newProviderFromConfig(cfg config.ProviderConfig) (provider.Provider, error) {
+	switch strings.ToLower(strings.TrimSpace(cfg.Type)) {
+	case "anthropic":
+		return provider.NewAnthropic(cfg)
+	case "openai":
+		return provider.NewOpenAI(cfg)
+	case "ollama":
+		return provider.NewOllama(cfg)
 	default:
-		return nil, fmt.Errorf("unknown runner %q (expected: mock | sandbox | api)", name)
-	}
-}
-
-// warnIfStubRunner prints a loud warning when a non-agent runner is used.
-// mock and sandbox are keyword-matching stubs — their pass/fail signal cannot
-// be used to ship a skill.
-func warnIfStubRunner(name string) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "mock", "sandbox":
-		fmt.Fprintln(os.Stderr, "[WARN] ────────────────────────────────────────────────────────────")
-		fmt.Fprintf(os.Stderr, "[WARN] Runner %q does NOT invoke a real agent.\n", name)
-		fmt.Fprintln(os.Stderr, "[WARN] Pass/fail results CANNOT be used to validate skill compliance.")
-		fmt.Fprintln(os.Stderr, "[WARN] Use --runner=api (or set default_runner: api in ast.yaml) for")
-		fmt.Fprintln(os.Stderr, "[WARN] real behavior testing before treating any result as shippable.")
-		fmt.Fprintln(os.Stderr, "[WARN] ────────────────────────────────────────────────────────────")
+		return nil, fmt.Errorf("unknown provider type %q (expected: anthropic | openai | ollama)", cfg.Type)
 	}
 }
 
 func writeAnnotatedConfig(path string, cfg *config.Config) error {
+	pc := cfg.ResolveProvider()
 	body := fmt.Sprintf(`project: %s
 scenarios_dir: %s
 reports_dir: %s
 
-# Runner backend used by 'ast test'. Override per-invocation with --runner=NAME.
-#   api      — real Claude agent (only mode that can validate a skill for release)
-#   sandbox  — keyword-matching stub; framework smoke test only, NOT skill validation
-#   mock     — fixed-output stub; framework smoke test only, NOT skill validation
-default_runner: %s
-
-api:
-  key: %q            # leave empty to read ANTHROPIC_API_KEY
+# LLM provider backend.
+provider:
+  type: %s            # anthropic | openai | ollama
+  key: %q             # leave empty to read env var (ANTHROPIC_API_KEY / OPENAI_API_KEY)
   model: %s
   endpoint: %s
-  timeout: %d        # seconds per scenario
+  timeout: %d         # seconds per scenario
 `,
 		cfg.Project, cfg.ScenariosDir, cfg.ReportsDir,
-		cfg.DefaultRunner,
-		cfg.API.Key, cfg.API.Model, cfg.API.Endpoint, cfg.API.Timeout,
+		pc.Type, pc.Key, pc.Model, pc.Endpoint, pc.Timeout,
 	)
 	return os.WriteFile(path, []byte(body), 0o644)
 }
 
 func scaffoldExampleSkill(dir string) error {
 	if _, err := os.Stat(dir); err == nil {
-		return nil // don't clobber existing
+		return nil
 	}
 	files := map[string]string{
 		"skill.yaml": `id: example-skill
