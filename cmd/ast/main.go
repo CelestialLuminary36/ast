@@ -20,28 +20,6 @@ import (
 
 const configFile = "ast.yaml"
 
-// embeddedDefaultScenario is used when no scenario files are found.
-const embeddedDefaultScenario = `id: default
-name: "默认场景"
-description: "验证 Agent 是否能根据用户提示创建文件"
-environment:
-  fixture_dir: ""
-  init_script: ""
-input:
-  user_prompt: "Create a file named hello.txt with the content 'hello world'"
-assert:
-  file_mutations:
-    allowed:
-      - "hello.txt"
-  command_execution:
-    must_have: []
-    must_not_have:
-      - contains: "rm -rf"
-  output_text:
-    must_include:
-      - "hello"
-`
-
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -57,6 +35,11 @@ func main() {
 	case "test":
 		if err := cmdTest(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "test failed: %v\n", err)
+			os.Exit(1)
+		}
+	case "validate":
+		if err := cmdValidate(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "validate failed: %v\n", err)
 			os.Exit(1)
 		}
 	case "report":
@@ -75,9 +58,14 @@ func usage() {
 	fmt.Println(`ast - Agent Skill Tester
 
 Usage:
-  ast init                         Generate ast.yaml (optional)
-  ast test <skill-dir>             Run scenarios against a skill directory
-                                   (looks for scenarios/ inside the skill dir first)
+  ast init                         Generate ast.yaml + ./scenarios/<example>/ + ./skills/example-skill/
+  ast validate <skill-dir>         Lint a skill: structure, instructions, tools, scenarios
+  ast test <skill-dir> [--scenarios=DIR]
+                                   Run scenarios against a skill. Discovery order:
+                                     1. --scenarios=DIR (explicit)
+                                     2. <scenarios_dir>/<skill-id>/   (default)
+                                     3. <scenarios_dir>/              (flat fallback)
+                                     4. <skill-dir>/scenarios/        (deprecated, warns)
   ast report <report.json>         Display a previously generated report
 
 Environment:
@@ -99,12 +87,13 @@ func cmdInit(_ []string) error {
 	}
 	fmt.Printf("Created %s\n", configFile)
 
-	scenariosDir := cfg.ScenariosDir
-	if err := os.MkdirAll(scenariosDir, 0755); err != nil {
+	// Per-skill layout: scenarios live at <scenarios_dir>/<skill-id>/, not nested in the skill.
+	exampleDir := filepath.Join(cfg.ScenariosDir, "example-skill")
+	if err := os.MkdirAll(exampleDir, 0755); err != nil {
 		return err
 	}
 
-	examplePath := filepath.Join(scenariosDir, "example.yaml")
+	examplePath := filepath.Join(exampleDir, "example.yaml")
 	if _, err := os.Stat(examplePath); os.IsNotExist(err) {
 		example := `id: example
 name: "示例场景"
@@ -172,16 +161,19 @@ func cmdTest(args []string) error {
 		return fmt.Errorf("load skill: %w", err)
 	}
 
-	// Default: look for scenarios/ inside the skill directory first,
-	// fall back to the global scenarios_dir from config.
-	scenariosDir := filepath.Join(skillDir, "scenarios")
-	if override := parseScenariosFlag(args[1:]); override != "" {
-		scenariosDir = override
+	scenarios, src := resolveScenarios(skillDir, sk.ID, cfg.ScenariosDir, parseScenariosFlag(args[1:]))
+	if src == sourceNotFound {
+		return fmt.Errorf("no scenarios found for skill %q.\n  Tried: %s\n  Create one at %s/<name>.yaml, or pass --scenarios=DIR.",
+			sk.ID,
+			strings.Join(triedPaths(skillDir, sk.ID, cfg.ScenariosDir), ", "),
+			filepath.Join(cfg.ScenariosDir, sk.ID),
+		)
 	}
-	scenarios := loadScenarios(scenariosDir)
-	if len(scenarios) == 0 {
-		// Fall back to global scenarios dir
-		scenarios = loadScenarios(cfg.ScenariosDir)
+	if src == sourceNestedDeprecated {
+		fmt.Fprintf(os.Stderr, "warning: loaded scenarios from %s (nested inside skill). This layout is deprecated — move them to %s so the skill stays portable.\n",
+			filepath.Join(skillDir, "scenarios"),
+			filepath.Join(cfg.ScenariosDir, sk.ID),
+		)
 	}
 
 	for i := range scenarios {
@@ -301,6 +293,93 @@ func cmdTest(args []string) error {
 	return nil
 }
 
+// ---------- validate ----------
+
+func cmdValidate(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("missing skill directory\n\nUsage: ast validate <skill-dir>")
+	}
+	skillDir := args[0]
+	cfg := loadConfigOrDefault()
+
+	issues, warns := validateSkill(skillDir, cfg.ScenariosDir)
+
+	fmt.Printf("Validating skill: %s\n", skillDir)
+	for _, w := range warns {
+		fmt.Printf("  [WARN] %s\n", w)
+	}
+	for _, e := range issues {
+		fmt.Printf("  [FAIL] %s\n", e)
+	}
+	if len(issues) == 0 {
+		if len(warns) == 0 {
+			fmt.Println("  OK")
+		} else {
+			fmt.Printf("  OK (%d warning(s))\n", len(warns))
+		}
+		return nil
+	}
+	return fmt.Errorf("%d issue(s) found", len(issues))
+}
+
+// validateSkill is the testable core of `ast validate`. Returns (errors, warnings).
+func validateSkill(skillDir, scenariosDir string) (issues, warns []string) {
+	info, err := os.Stat(skillDir)
+	if err != nil {
+		return []string{fmt.Sprintf("skill dir not accessible: %v", err)}, nil
+	}
+	if !info.IsDir() {
+		return []string{fmt.Sprintf("%s is not a directory", skillDir)}, nil
+	}
+
+	sk, err := skill.LoadFromDir(skillDir)
+	if err != nil {
+		issues = append(issues, fmt.Sprintf("load skill: %v", err))
+		return issues, warns
+	}
+	if sk.Instructions == "" {
+		issues = append(issues, "no instructions found (expected one of: instructions.md, skill.md, README.md, instruction.md, instruction.txt)")
+	} else if len(strings.TrimSpace(sk.Instructions)) < 16 {
+		warns = append(warns, "instructions are very short — agents may not have enough context to follow them")
+	}
+	if _, err := os.Stat(filepath.Join(skillDir, "skill.yaml")); os.IsNotExist(err) {
+		warns = append(warns, "no skill.yaml — metadata (id, name, version) will be derived from the directory name")
+	}
+	for _, td := range sk.ToolDefs {
+		if td.Name == "" {
+			issues = append(issues, "tools/: a definition is missing required 'name' field")
+		}
+	}
+
+	perSkillDir := filepath.Join(scenariosDir, sk.ID)
+
+	// Pollution check: scenarios should not live inside the skill package.
+	nested := filepath.Join(skillDir, "scenarios")
+	if ni, err := os.Stat(nested); err == nil && ni.IsDir() {
+		warns = append(warns, fmt.Sprintf("found %s — scenarios should live outside the skill (e.g. %s) so the skill stays portable across agents", nested, perSkillDir))
+	}
+
+	// If a per-skill scenarios dir exists, lint every scenario in it.
+	if si, err := os.Stat(perSkillDir); err == nil && si.IsDir() {
+		scs, err := scenario.LoadFromDir(perSkillDir)
+		if err != nil {
+			issues = append(issues, fmt.Sprintf("scenarios in %s: %v", perSkillDir, err))
+		}
+		for _, sc := range scs {
+			if err := scenario.Validate(sc); err != nil {
+				issues = append(issues, fmt.Sprintf("scenario %s: %v", sc.ID, err))
+			}
+		}
+		if len(scs) == 0 {
+			warns = append(warns, fmt.Sprintf("%s exists but contains no scenarios", perSkillDir))
+		}
+	} else {
+		warns = append(warns, fmt.Sprintf("no scenarios at %s — `ast test` will have nothing to run", perSkillDir))
+	}
+
+	return issues, warns
+}
+
 // ---------- report ----------
 
 func cmdReport(args []string) error {
@@ -328,28 +407,61 @@ func loadConfigOrDefault() *config.Config {
 	return cfg
 }
 
-func loadScenarios(path string) []scenario.Scenario {
-	info, err := os.Stat(path)
-	if err != nil {
-		return defaultScenario()
-	}
-	if info.IsDir() {
-		scenarios, err := scenario.LoadFromDir(path)
-		if err != nil || len(scenarios) == 0 {
-			return defaultScenario()
+type scenarioSource int
+
+const (
+	sourceNotFound scenarioSource = iota
+	sourceExplicit
+	sourcePerSkill
+	sourceFlatFallback
+	sourceNestedDeprecated
+)
+
+// resolveScenarios walks the discovery order and returns the first hit.
+// Order: explicit --scenarios → <scenarios_dir>/<skill-id>/ → <scenarios_dir>/
+//        → <skill-dir>/scenarios/ (deprecated).
+func resolveScenarios(skillDir, skillID, scenariosDir, explicit string) ([]scenario.Scenario, scenarioSource) {
+	if explicit != "" {
+		if scs := loadScenariosFromPath(explicit); len(scs) > 0 {
+			return scs, sourceExplicit
 		}
-		return scenarios
+		return nil, sourceNotFound
 	}
-	// Single file
-	sc, err := scenario.LoadFromFile(path)
-	if err != nil {
-		return defaultScenario()
+	perSkill := filepath.Join(scenariosDir, skillID)
+	if scs := loadScenariosFromPath(perSkill); len(scs) > 0 {
+		return scs, sourcePerSkill
 	}
-	return []scenario.Scenario{sc}
+	if scs := loadScenariosFromPath(scenariosDir); len(scs) > 0 {
+		return scs, sourceFlatFallback
+	}
+	nested := filepath.Join(skillDir, "scenarios")
+	if scs := loadScenariosFromPath(nested); len(scs) > 0 {
+		return scs, sourceNestedDeprecated
+	}
+	return nil, sourceNotFound
 }
 
-func defaultScenario() []scenario.Scenario {
-	sc, err := scenario.Parse(strings.NewReader(embeddedDefaultScenario))
+func triedPaths(skillDir, skillID, scenariosDir string) []string {
+	return []string{
+		filepath.Join(scenariosDir, skillID),
+		scenariosDir,
+		filepath.Join(skillDir, "scenarios"),
+	}
+}
+
+func loadScenariosFromPath(path string) []scenario.Scenario {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	if info.IsDir() {
+		scs, err := scenario.LoadFromDir(path)
+		if err != nil {
+			return nil
+		}
+		return scs
+	}
+	sc, err := scenario.LoadFromFile(path)
 	if err != nil {
 		return nil
 	}
