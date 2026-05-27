@@ -1,5 +1,7 @@
 # ast — Agent Skill Tester
 
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+
 A CLI for running scenario-based regression tests against Claude **Skills**. Each scenario gives the agent a prompt, an isolated workspace, and a set of assertions; `ast` runs the skill, observes file mutations / executed commands / model output, and produces a pass/fail report.
 
 ## Quick start
@@ -101,8 +103,38 @@ For each scenario the runner:
 ## Commands
 
 ```
-ast init                                              Initialize project (ast.yaml + sample scenario)
+ast init                                              Initialize project (ast.yaml + ./scenarios/example-skill/ + ./skills/example-skill/)
+ast validate <skill-dir>                              Lint a skill (structure, instructions, tools, scenarios; warns on nested scenarios/)
 ast test <skill-dir> [--runner=NAME] [--scenarios=DIR]
                                                       Run scenarios; flags override ast.yaml defaults
 ast report <report.json>                              Re-print a previously generated report
 ```
+
+## Project layout
+
+Skill packages should remain **portable** — they get shared between agents
+(Claude Code, Cursor, Codex, ...). Tests for a skill are not part of the
+skill; they live next to it:
+
+```
+project/
+├── ast.yaml
+├── skills/
+│   └── go-reviewer/             # the portable artifact
+│       ├── skill.yaml
+│       ├── instructions.md
+│       └── tools/
+└── scenarios/
+    └── go-reviewer/             # tests, named after the skill's id
+        └── nil-panic.yaml
+```
+
+`ast test ./skills/go-reviewer` discovers scenarios in this order:
+
+1. `--scenarios=DIR` if you passed it
+2. `./scenarios/<skill-id>/` &nbsp; ← recommended
+3. `./scenarios/` &nbsp; (flat fallback)
+4. `./skills/<skill>/scenarios/` &nbsp; ← **deprecated**, emits a stderr warning. This layout pollutes the skill package; move the files out.
+
+If none of those exist, `ast test` aborts with a message telling you where
+to put a scenario file. There is no longer a silent "default" scenario.
