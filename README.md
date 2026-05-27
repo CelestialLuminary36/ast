@@ -1,15 +1,37 @@
 # ast — Agent Skill Tester
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/hhy/ast/actions/workflows/ci.yml/badge.svg)](https://github.com/hhy/ast/actions/workflows/ci.yml)
 
 A CLI for running scenario-based regression tests against Claude **Skills**. Each scenario gives the agent a prompt, an isolated workspace, and a set of assertions; `ast` runs the skill, observes file mutations / executed commands / model output, and produces a pass/fail report.
+
+## Install
+
+Pick whichever fits your setup:
+
+**Pre-built binary** — grab the archive for your OS/arch from the [latest release](https://github.com/hhy/ast/releases/latest), extract, and put `ast` (or `ast.exe`) on your `$PATH`.
+
+**`go install`** — needs Go 1.25+:
+
+```bash
+go install github.com/hhy/ast/cmd/ast@latest
+```
+
+**From source**:
+
+```bash
+git clone https://github.com/hhy/ast.git
+cd ast
+go build -o ast ./cmd/ast        # produces ./ast (or ./ast.exe on Windows)
+```
+
+Verify with `ast version`.
 
 ## Quick start
 
 ```bash
-go build -o ast.exe ./cmd/ast
-./ast.exe init
-./ast.exe test ./skills/my-skill
+ast init
+ast test ./skills/my-skill
 ```
 
 `init` creates `ast.yaml`, a sample scenario, and the `reports/` directory.
