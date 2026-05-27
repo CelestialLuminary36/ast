@@ -1,4 +1,4 @@
-module github.com/CelestialLuminary36/agent-skill-test
+module github.com/hhy/ast
 
 go 1.25.0
 

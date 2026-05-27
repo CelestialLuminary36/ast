@@ -3,7 +3,7 @@ package provider
 import (
 	"fmt"
 
-	"github.com/CelestialLuminary36/agent-skill-test/internal/skill"
+	"github.com/hhy/ast/internal/skill"
 )
 
 // builtinTools is the registry of tools the runtime knows how to execute.

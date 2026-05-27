@@ -34,7 +34,7 @@ the concrete files to touch so later sessions can pick up cold.
 ### Release plumbing
 
 - [ ] **Rename Go module.**
-  Current path `github.com/CelestialLuminary36/agent-skill-test` is a
+  Current path `github.com/hhy/ast` is a
   placeholder. Decide the org/repo name (suggestion:
   `github.com/<org>/ast` or `github.com/<org>/skill-check`) and
   rewrite imports across all `.go` files plus [go.mod](go.mod).

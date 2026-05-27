@@ -10,7 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 
-	"github.com/CelestialLuminary36/agent-skill-test/internal/config"
+	"github.com/hhy/ast/internal/config"
 )
 
 const defaultAnthropicEndpoint = "https://api.anthropic.com/v1/messages"

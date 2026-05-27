@@ -1,8 +1,8 @@
 package judge
 
 import (
-	"github.com/CelestialLuminary36/agent-skill-test/internal/runner"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/scenario"
+	"github.com/hhy/ast/internal/runner"
+	"github.com/hhy/ast/internal/scenario"
 )
 
 type Judge interface {

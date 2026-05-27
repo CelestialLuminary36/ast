@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/CelestialLuminary36/agent-skill-test/internal/skill"
+	"github.com/hhy/ast/internal/skill"
 )
 
 func TestBuildToolList_EmptyDefsReturnsAllBuiltins(t *testing.T) {

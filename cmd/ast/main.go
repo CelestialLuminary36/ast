@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CelestialLuminary36/agent-skill-test/internal/config"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/judge"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/provider"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/report"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/runner"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/scenario"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/skill"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/workspace"
+	"github.com/hhy/ast/internal/config"
+	"github.com/hhy/ast/internal/judge"
+	"github.com/hhy/ast/internal/provider"
+	"github.com/hhy/ast/internal/report"
+	"github.com/hhy/ast/internal/runner"
+	"github.com/hhy/ast/internal/scenario"
+	"github.com/hhy/ast/internal/skill"
+	"github.com/hhy/ast/internal/workspace"
 )
 
 const configFile = "ast.yaml"

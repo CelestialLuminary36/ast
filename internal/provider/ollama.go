@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CelestialLuminary36/agent-skill-test/internal/config"
+	"github.com/hhy/ast/internal/config"
 )
 
 const defaultOllamaEndpoint = "http://localhost:11434"

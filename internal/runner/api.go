@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CelestialLuminary36/agent-skill-test/internal/config"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/provider"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/scenario"
-	"github.com/CelestialLuminary36/agent-skill-test/internal/skill"
+	"github.com/hhy/ast/internal/config"
+	"github.com/hhy/ast/internal/provider"
+	"github.com/hhy/ast/internal/scenario"
+	"github.com/hhy/ast/internal/skill"
 )
 
 const (
