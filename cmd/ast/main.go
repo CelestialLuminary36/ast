@@ -20,6 +20,15 @@ import (
 
 const configFile = "ast.yaml"
 
+// Build-time identity. Defaults make `go build` (no -ldflags) produce
+// "dev" / "none" / "unknown"; goreleaser overrides all three with real
+// values via -X flags in .goreleaser.yaml.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -27,6 +36,12 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "--version", "-v", "version":
+		fmt.Printf("ast %s (commit %s, built %s)\n", version, commit, date)
+		return
+	case "--help", "-h", "help":
+		usage()
+		return
 	case "init":
 		if err := cmdInit(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "init failed: %v\n", err)
@@ -67,6 +82,7 @@ Usage:
                                      3. <scenarios_dir>/              (flat fallback)
                                      4. <skill-dir>/scenarios/        (deprecated, warns)
   ast report <report.json>         Display a previously generated report
+  ast version                      Print the binary version and exit
 
 Environment:
   ANTHROPIC_API_KEY                API key for the anthropic provider
