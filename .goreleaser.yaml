@@ -1,0 +1,81 @@
+# goreleaser config — invoked by .github/workflows/release.yml on git tag push.
+# Local dry-run: goreleaser release --snapshot --clean --skip=publish
+version: 2
+
+project_name: ast
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: ast
+    main: ./cmd/ast
+    binary: ast
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Windows/arm64 builds exist but the audience is vanishingly small;
+      # drop them to keep the release page tidy. Add back if anyone asks.
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .Date }}
+
+archives:
+  - id: ast
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "^style:"
+      - "merge conflict"
+      - "Merge pull request"
+      - "Merge remote-tracking branch"
+      - "Merge branch"
+
+release:
+  draft: false
+  prerelease: auto
+  name_template: "v{{ .Version }}"
+  header: |
+    `ast` — Agent Skill Tester
+
+    Install:
+
+    ```bash
+    # Pick the archive for your OS/arch, extract, and put `ast` on $PATH.
+    # Or with Go installed:
+    go install github.com/hhy/ast/cmd/ast@v{{ .Version }}
+    ```

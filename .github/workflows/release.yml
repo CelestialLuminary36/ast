@@ -1,0 +1,39 @@
+name: Release
+
+# Triggered by pushing a semver tag, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+# goreleaser builds cross-platform archives, uploads them to a GitHub
+# Release for the tag, and publishes checksums.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  # Required for goreleaser to create/update releases and upload assets.
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # goreleaser needs full history to compute the changelog.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
