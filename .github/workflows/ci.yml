@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt check
+        # gofmt has no native exit-on-diff flag; -l prints offending files.
+        # Failing on any output keeps formatting honest without an extra dep.
+        # Linux-only: a Windows checkout can rewrite line endings (even with
+        # .gitattributes, contributors may bypass it), and gofmt would then
+        # flag every file. Running this once on Linux is enough.
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "::error::These files are not gofmt-clean:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test (race)
+        # -race needs CGO. The default windows-latest runner has no C toolchain
+        # configured, so we run the race detector on Linux + macOS only.
+        if: matrix.os != 'windows-latest'
+        run: go test -race -count=1 ./...
+
+      - name: go test (windows)
+        if: matrix.os == 'windows-latest'
+        run: go test -count=1 ./...
+
+      - name: Build CLI binary
+        run: go build -o ./ast-${{ matrix.os }} ./cmd/ast
+
+      - name: Smoke-test the binary (init + validate)
+        # Exercise the no-LLM-required paths so we know the binary is wired
+        # correctly on every platform. `ast test` is intentionally skipped:
+        # it requires an API key and would burn credits on every PR.
+        shell: bash
+        run: |
+          mkdir _smoke && cd _smoke
+          ../ast-${{ matrix.os }} init
+          test -f ast.yaml || (echo "init did not create ast.yaml"; exit 1)
+          test -d scenarios/example-skill || (echo "init did not create per-skill scenarios dir"; exit 1)
+          test -d skills/example-skill || (echo "init did not scaffold example skill"; exit 1)
+          ../ast-${{ matrix.os }} validate ./skills/example-skill
