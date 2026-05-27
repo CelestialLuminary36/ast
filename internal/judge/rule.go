@@ -129,9 +129,13 @@ func (j *Judgement) append(other *Judgement) {
 // delegating to doublestar/v4. Slashes are normalized to forward slashes so
 // Windows-style paths in `git status` output match POSIX-style patterns in
 // scenario YAML.
+//
+// Uses doublestar.Match (always '/' separator), not PathMatch (OS-specific
+// separator). On Windows PathMatch treats '/' as a literal character which
+// makes `*.go` over-match `src/main.go` and `**` collapse incorrectly.
 func matchGlob(pattern, s string) bool {
 	pattern = strings.ReplaceAll(pattern, "\\", "/")
 	s = strings.ReplaceAll(s, "\\", "/")
-	ok, _ := doublestar.PathMatch(pattern, s)
+	ok, _ := doublestar.Match(pattern, s)
 	return ok
 }
