@@ -37,25 +37,45 @@ func runGit(ctx context.Context, dir string, args ...string) error {
 	return err
 }
 
-func captureMutations(ctx context.Context, dir string) ([]string, error) {
+func captureMutations(ctx context.Context, dir string) ([]string, map[string]string, error) {
 	cmd := exec.CommandContext(ctx, "git", "status", "--porcelain")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var files []string
+	contents := map[string]string{}
 	for _, line := range strings.Split(string(out), "\n") {
 		if len(line) < 3 {
 			continue
 		}
+		// Porcelain status code lives in cols 1-2. " D" / "D " mean deletion,
+		// in which case there is no file to read.
+		status := line[:2]
 		fname := strings.TrimSpace(line[2:])
-		if fname != "" {
-			files = append(files, fname)
+		if fname == "" {
+			continue
 		}
+		// Git renames render as "R  old -> new"; take the new path.
+		if idx := strings.Index(fname, " -> "); idx >= 0 {
+			fname = fname[idx+4:]
+		}
+		files = append(files, fname)
+
+		if strings.ContainsRune(status, 'D') {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join(dir, fname))
+		if readErr != nil {
+			// Best-effort: a binary or unreadable file shouldn't fail the run.
+			// The judge sees an absent key and can decide what to do.
+			continue
+		}
+		contents[fname] = string(data)
 	}
-	return files, nil
+	return files, contents, nil
 }
 
 func copyDir(src, dst string) error {

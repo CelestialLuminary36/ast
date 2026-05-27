@@ -2,11 +2,12 @@ package judge
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/hhy/ast/internal/runner"
 	"github.com/hhy/ast/internal/scenario"
-	"github.com/bmatcuk/doublestar/v4"
 )
 
 type RuleJudge struct{}
@@ -26,6 +27,9 @@ func (j *RuleJudge) Judge(result *runner.RunResult, sc scenario.Scenario) (*Judg
 
 	// 3. Output text audit
 	jdg.append(j.auditOutputText(result.Output, sc.Assert.OutputText))
+
+	// 4. File content audit (regex over post-run contents of mutated files)
+	jdg.append(j.auditFileContent(result.MutatedFiles, result.FileContents, sc.Assert.FileContent))
 
 	return jdg, nil
 }
@@ -116,6 +120,107 @@ func (j *RuleJudge) auditOutputText(output string, assert scenario.TextAssert) *
 	}
 
 	return jdg
+}
+
+func (j *RuleJudge) auditFileContent(mutated []string, contents map[string]string, rules []scenario.FileContentAssert) *Judgement {
+	jdg := &Judgement{Passed: true}
+
+	for ruleIdx, rule := range rules {
+		// Find mutated files matching this rule's glob. We restrict to mutated
+		// files (not the whole workspace) because file_content asserts what the
+		// agent *changed* — unchanged files were already correct.
+		var matchingFiles []string
+		for _, f := range mutated {
+			if matchGlob(rule.Glob, f) {
+				matchingFiles = append(matchingFiles, f)
+			}
+		}
+		if len(matchingFiles) == 0 {
+			jdg.Passed = false
+			jdg.Errors = append(jdg.Errors, fmt.Sprintf("file_content rule #%d: no mutated file matches glob %q", ruleIdx+1, rule.Glob))
+			continue
+		}
+
+		// Compile regexes once per rule. A compile failure is a scenario-author
+		// bug, not an agent failure — surface it loudly.
+		mustMatch, err := compileRegexes(rule.MustMatch)
+		if err != nil {
+			jdg.Passed = false
+			jdg.Errors = append(jdg.Errors, fmt.Sprintf("file_content rule #%d: invalid must_match regex: %v", ruleIdx+1, err))
+			continue
+		}
+		mustNotMatch, err := compileRegexes(rule.MustNotMatch)
+		if err != nil {
+			jdg.Passed = false
+			jdg.Errors = append(jdg.Errors, fmt.Sprintf("file_content rule #%d: invalid must_not_match regex: %v", ruleIdx+1, err))
+			continue
+		}
+
+		fileSatisfies := func(content string) (bool, string) {
+			for i, re := range mustMatch {
+				if !re.MatchString(content) {
+					return false, fmt.Sprintf("missing required pattern %q", rule.MustMatch[i])
+				}
+			}
+			for i, re := range mustNotMatch {
+				if re.MatchString(content) {
+					return false, fmt.Sprintf("forbidden pattern present %q", rule.MustNotMatch[i])
+				}
+			}
+			return true, ""
+		}
+
+		if rule.MatchAllFiles {
+			for _, f := range matchingFiles {
+				content, ok := contents[f]
+				if !ok {
+					jdg.Passed = false
+					jdg.Errors = append(jdg.Errors, fmt.Sprintf("file_content rule #%d: %s has no captured content (binary or deleted?)", ruleIdx+1, f))
+					continue
+				}
+				if pass, reason := fileSatisfies(content); !pass {
+					jdg.Passed = false
+					jdg.Errors = append(jdg.Errors, fmt.Sprintf("file_content rule #%d: %s — %s", ruleIdx+1, f, reason))
+				}
+			}
+			continue
+		}
+
+		// Default: at least one matching file must satisfy the rule.
+		anyPassed := false
+		var reasons []string
+		for _, f := range matchingFiles {
+			content, ok := contents[f]
+			if !ok {
+				reasons = append(reasons, fmt.Sprintf("%s: no captured content", f))
+				continue
+			}
+			if pass, reason := fileSatisfies(content); pass {
+				anyPassed = true
+				break
+			} else {
+				reasons = append(reasons, fmt.Sprintf("%s: %s", f, reason))
+			}
+		}
+		if !anyPassed {
+			jdg.Passed = false
+			jdg.Errors = append(jdg.Errors, fmt.Sprintf("file_content rule #%d (glob %q): no matching file satisfied the rule. tried: %s", ruleIdx+1, rule.Glob, strings.Join(reasons, "; ")))
+		}
+	}
+
+	return jdg
+}
+
+func compileRegexes(patterns []string) ([]*regexp.Regexp, error) {
+	out := make([]*regexp.Regexp, 0, len(patterns))
+	for _, p := range patterns {
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", p, err)
+		}
+		out = append(out, re)
+	}
+	return out, nil
 }
 
 func (j *Judgement) append(other *Judgement) {

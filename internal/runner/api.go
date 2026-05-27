@@ -121,14 +121,16 @@ func (r *LLMRunner) Run(ctx context.Context, sk skill.Skill, sc scenario.Scenari
 		messages = append(messages, provider.Message{Role: "user", Content: resultBlocks})
 	}
 
-	// Capture mutations via git diff
-	mutatedFiles, _ := captureMutations(ctx, ws)
+	// Capture mutations via git diff, plus the post-run contents of each
+	// mutated file so the judge can audit content even after workspace cleanup.
+	mutatedFiles, fileContents, _ := captureMutations(ctx, ws)
 
 	return &RunResult{
 		ScenarioID:   sc.ID,
 		Output:       finalOutput,
 		ExecutedCmds: executor.ExecutedCmds,
 		MutatedFiles: mutatedFiles,
+		FileContents: fileContents,
 		Duration:     time.Since(start),
 	}, nil
 }
