@@ -129,7 +129,7 @@ If a skill has no `tools/` directory, all four builtins are exposed
 ### `ast.yaml` reference
 
 ```yaml
-project: agent-skill-test
+project: ast
 scenarios_dir: ./scenarios
 reports_dir: ./reports
 default_runner: api           # api | sandbox | mock — only api validates skills
@@ -157,12 +157,17 @@ For each scenario the runner:
 
 ```
 ast init                                              Initialize project (ast.yaml + ./scenarios/example-skill/ + ./skills/example-skill/)
+ast list [--dir=DIR]                                  Enumerate skills with format, scenario count, and health status
 ast validate <skill-dir>                              Lint a skill (structure, instructions, tools, scenarios; warns on nested scenarios/)
 ast gen <skill-dir> [--out=DIR] [--count=N]           Ask the configured LLM to draft N scenarios (default 3)
 ast test <skill-dir> [--runner=NAME] [--scenarios=DIR]
                                                       Run scenarios; flags override ast.yaml defaults
 ast report <report.json>                              Re-print a previously generated report
 ast version                                           Print version, commit, build date
+```
+
+All commands accept `--help` / `-h` for per-command usage. Pass `--no-color`
+to any command to disable ANSI color output (or set `NO_COLOR=1`).
 ```
 
 ### `ast gen` — bootstrap scenarios with an LLM

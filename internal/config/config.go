@@ -62,7 +62,7 @@ func (c *Config) ResolveProvider() ProviderConfig {
 
 func Default() *Config {
 	return &Config{
-		Project:      "agent-skill-test",
+		Project:      "ast",
 		ScenariosDir: "./scenarios",
 		ReportsDir:   "./reports",
 		API: APIConfig{
