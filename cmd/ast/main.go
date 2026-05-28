@@ -62,6 +62,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "gen failed: %v\n", err)
 			os.Exit(1)
 		}
+	case "list":
+		if err := cmdList(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "list failed: %v\n", err)
+			os.Exit(1)
+		}
 	case "report":
 		if err := cmdReport(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "report failed: %v\n", err)
@@ -84,6 +89,8 @@ Usage:
                                    Ask the configured LLM to generate N (default 3) scenario
                                    drafts for the skill. Written to ./scenarios/<skill-id>/
                                    with metadata.generated=true for downstream visibility.
+  ast list [--dir=DIR]             List skills under DIR (default ./skills) with id, format,
+                                   scenario count, and a quick health status.
   ast test <skill-dir> [--scenarios=DIR]
                                    Run scenarios against a skill. Discovery order:
                                      1. --scenarios=DIR (explicit)
@@ -430,6 +437,11 @@ func cmdValidate(args []string) error {
 	issues, warns := validateSkill(skillDir, cfg.ScenariosDir)
 
 	fmt.Printf("Validating skill: %s\n", skillDir)
+	// Best-effort: re-load to print the detected format. Cheap, and avoids
+	// changing validateSkill's signature just to surface this info.
+	if sk, err := skill.LoadFromDir(skillDir); err == nil {
+		fmt.Printf("  [INFO] detected format: %s\n", sk.Format)
+	}
 	for _, w := range warns {
 		fmt.Printf("  [WARN] %s\n", w)
 	}
@@ -462,7 +474,6 @@ func validateSkill(skillDir, scenariosDir string) (issues, warns []string) {
 		issues = append(issues, fmt.Sprintf("load skill: %v", err))
 		return issues, warns
 	}
-	warns = append(warns, fmt.Sprintf("detected format: %s", sk.Format))
 	if sk.Instructions == "" {
 		issues = append(issues, "no instructions found (expected one of: instructions.md, skill.md, README.md, instruction.md, instruction.txt, AGENTS.md, .cursorrules, .cursor/rules/*.mdc)")
 	} else if len(strings.TrimSpace(sk.Instructions)) < 16 {

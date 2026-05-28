@@ -54,10 +54,12 @@ touch so later sessions can pick up cold.
 
 ## P2 — Polish (post-v0.1)
 
-- [x] **Per-subcommand `--help`.** `init`, `validate`, `gen`, `test`, `report`
+- [x] **Per-subcommand `--help`.** `init`, `validate`, `gen`, `test`, `report`, `list`
   all accept `--help` / `-h` / `help`. Top-level `--help` already worked.
-- [ ] **`ast list`.** Enumerate skills in the workspace and show
-  validate status / scenario count at a glance.
+- [x] **`ast list`.** Enumerates skills under `./skills` (override with
+  `--dir=DIR`) and prints id, format, scenario count, and status
+  (OK / WARN / ERROR). Failed loads surface as ERROR rather than being
+  silently skipped, so half-finished directories stay visible.
 - [ ] **`CONTRIBUTING.md`.** How to add a provider, how to add a new
   scenario assertion, code style, test conventions.
 - [ ] **`golangci-lint` config + lint job in CI.**
