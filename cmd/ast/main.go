@@ -353,13 +353,22 @@ func validateSkill(skillDir, scenariosDir string) (issues, warns []string) {
 		issues = append(issues, fmt.Sprintf("load skill: %v", err))
 		return issues, warns
 	}
+	warns = append(warns, fmt.Sprintf("detected format: %s", sk.Format))
 	if sk.Instructions == "" {
-		issues = append(issues, "no instructions found (expected one of: instructions.md, skill.md, README.md, instruction.md, instruction.txt)")
+		issues = append(issues, "no instructions found (expected one of: instructions.md, skill.md, README.md, instruction.md, instruction.txt, AGENTS.md, .cursorrules, .cursor/rules/*.mdc)")
 	} else if len(strings.TrimSpace(sk.Instructions)) < 16 {
 		warns = append(warns, "instructions are very short — agents may not have enough context to follow them")
 	}
-	if _, err := os.Stat(filepath.Join(skillDir, "skill.yaml")); os.IsNotExist(err) {
-		warns = append(warns, "no skill.yaml — metadata (id, name, version) will be derived from the directory name")
+	// Format-specific advice. Non-Anthropic formats cannot express a tool
+	// whitelist, so the runner exposes all builtins — flag this so users
+	// know they aren't getting the same isolation they'd get from skill.yaml.
+	switch sk.Format {
+	case skill.FormatAnthropic:
+		if _, err := os.Stat(filepath.Join(skillDir, "skill.yaml")); os.IsNotExist(err) {
+			warns = append(warns, "no skill.yaml — metadata (id, name, version) will be derived from the directory name")
+		}
+	case skill.FormatCursorRules, skill.FormatAgentsMD, skill.FormatFrontmatter:
+		warns = append(warns, fmt.Sprintf("%s format has no tool whitelist — runner will expose all builtins. For tool isolation, port to the Anthropic package format (skill.yaml + tools/).", sk.Format))
 	}
 	for _, td := range sk.ToolDefs {
 		if td.Name == "" {

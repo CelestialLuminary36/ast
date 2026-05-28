@@ -36,6 +36,24 @@ ast test ./skills/my-skill
 
 `init` creates `ast.yaml`, a sample scenario, and the `reports/` directory.
 
+## Supported skill formats
+
+`ast` detects the on-disk layout of `<skill-dir>` and normalises it
+internally, so the same scenario suite can run against skills authored
+for different agents.
+
+| Layout                          | Format         | Notes                                             |
+|---------------------------------|----------------|---------------------------------------------------|
+| `skill.yaml` + `instructions.md` + `tools/` | `anthropic`    | Full fidelity — id/name/version + tool whitelist. |
+| `.cursor/rules/*.mdc`           | `cursor`       | Cursor rule files with frontmatter; concatenated. |
+| `.cursorrules` (file)           | `cursor`       | Legacy single-file Cursor format.                 |
+| `AGENTS.md` or `.agents/*.md`   | `agents-md`    | Codex / generic convention. Optional frontmatter. |
+| Any `.md` with YAML frontmatter | `frontmatter`  | Last-resort fallback for custom layouts.          |
+
+Detection runs in the order shown — most-specific first. Only the
+Anthropic format can declare a tool whitelist; for the others the runner
+exposes all builtins and `ast validate` emits a warning.
+
 ## Runners
 
 `ast` ships three runner backends. **Only `api` invokes a real agent — it is
