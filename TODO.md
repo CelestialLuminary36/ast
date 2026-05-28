@@ -87,41 +87,14 @@ touch so later sessions can pick up cold.
 
 ---
 
-## Release readiness — non-code (needs user action)
+## Release readiness — done
 
-These steps need GitHub credentials and so cannot be done from inside
-the local sandbox. Heads-up on current local state: `git remote -v`
-still points `origin` at `git@github.com:CelestialLuminary36/agent-skill-test.git`,
-the old name. That has to be retargeted before any push will reach the
-right place.
-
-- [ ] **Create the GitHub repo at `github.com/hhy/ast`.**
-  Easiest via the web UI (Settings → New repository → `ast`, public,
-  no README/license/.gitignore — we already have them). Or with `gh`
-  installed:
-  ```bash
-  gh repo create hhy/ast --public --source=. --remote=origin --push
-  ```
-  If you used the web UI, retarget the existing remote instead of
-  pushing to the old one:
-  ```bash
-  git remote set-url origin git@github.com:hhy/ast.git
-  git push -u origin dev
-  git push origin main
-  ```
-- [ ] **Merge `dev` → `main`.** Open a PR on GitHub (or `gh pr create
-  --base main --head dev --title "v0.1.0 prep" --fill`), let CI go
-  green, and merge.
-- [ ] **Cut `v0.1.0`** from main:
-  ```bash
-  git checkout main
-  git pull --ff-only
-  git tag -a v0.1.0 -m "v0.1.0 — first credible cross-platform release"
-  git push origin v0.1.0
-  ```
-  The release workflow in `.github/workflows/release.yml` picks up
-  `v*` tags and runs goreleaser; archives land on the GitHub Releases
-  page automatically.
+- [x] **Create the GitHub repo** — `github.com:CelestialLuminary36/ast`
+- [x] **Retarget remote.** `git remote set-url origin git@github.com:CelestialLuminary36/ast.git`
+- [x] **Push branches.** `dev` and `main` pushed; `dev` (19 commits) fast-forwarded into `main`.
+- [x] **Cut `v0.1.0`.** Tag pushed; release workflow in `.github/workflows/release.yml`
+  picks up `v*` tags and runs goreleaser — archives land on GitHub Releases
+  automatically once CI completes.
 
 ---
 
