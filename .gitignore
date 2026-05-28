@@ -155,6 +155,10 @@ debug
 
 node_modules/
 
+# AST dev docs (local only)
+TODO.md
+CONTRIBUTING.md
+
 # AST runtime output
 ast.yaml
 reports/
