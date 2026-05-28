@@ -125,7 +125,7 @@ func isBlocked(cmd string) bool {
 	blocked := []string{
 		"rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf ~/*",
 		":(){ :|: & };:", "> /dev/sda", "dd if=/dev/zero",
-		"mkfs.", "chmod -R 777 /", "chown -R",
+		"mkfs.", "chmod -r 777 /", "chown -r",
 	}
 	for _, p := range blocked {
 		if strings.Contains(lower, p) {
