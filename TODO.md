@@ -60,8 +60,9 @@ touch so later sessions can pick up cold.
   `--dir=DIR`) and prints id, format, scenario count, and status
   (OK / WARN / ERROR). Failed loads surface as ERROR rather than being
   silently skipped, so half-finished directories stay visible.
-- [ ] **`CONTRIBUTING.md`.** How to add a provider, how to add a new
-  scenario assertion, code style, test conventions.
+- [x] **`CONTRIBUTING.md`.** Covers prerequisites, repository layout,
+  extension recipes (new provider / new assertion / new skill format),
+  code style, test conventions, commit/PR conventions, and license.
 - [ ] **`golangci-lint` config + lint job in CI.**
 - [ ] **Backfill missing test packages.** `internal/runner/`,
   `internal/workspace/`, `internal/scenario/`, `internal/report/` are
