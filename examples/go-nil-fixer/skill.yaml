@@ -1,0 +1,4 @@
+id: go-nil-fixer
+name: Go Nil Fixer
+version: "1.0.0"
+description: Fix Go nil-pointer panics safely — always add nil checks, run tests, and never touch go.mod

@@ -63,14 +63,27 @@ touch so later sessions can pick up cold.
 - [x] **`CONTRIBUTING.md`.** Covers prerequisites, repository layout,
   extension recipes (new provider / new assertion / new skill format),
   code style, test conventions, commit/PR conventions, and license.
-- [ ] **`golangci-lint` config + lint job in CI.**
-- [ ] **Backfill missing test packages.** `internal/runner/`,
-  `internal/workspace/`, `internal/scenario/`, `internal/report/` are
-  all `[no test files]` today.
-- [ ] **`examples/` directory.** A handful of complete skills users
-  can copy-paste. The current [skills/go-test-author/](skills/go-test-author/) is a good
-  starting template.
-- [ ] **Color output / TTY detection.** Optional `--no-color` flag.
+- [x] **`golangci-lint` config + lint job in CI.** `.golangci.yml` with
+  errcheck, gosimple, govet, ineffassign, staticcheck, unused, gofmt,
+  goimports, misspell, unconvert, unparam, prealloc. Lint job runs on
+  ubuntu-latest before the test matrix.
+- [x] **Backfill missing test packages.** All four previously
+  `[no test files]` packages now have coverage: `internal/runner/`
+  (ToolExecutor, isBlocked, buildSystemPrompt, helpers), `internal/workspace/`
+  (New, Path, Cleanup), `internal/scenario/` (Validate, Parse, LoadFromDir,
+  LoadFromFile), `internal/report/` (AddEntry, Save/Load round-trip,
+  SaveMarkdown). 19 new test functions total.
+- [x] **`examples/` directory.** Two copy-paste ready skills under
+  `examples/`: `go-nil-fixer` (full Anthropic format, 3 tools) and
+  `read-only-reviewer` (2-tool whitelist, no run_command). Each has
+  a README, skill.yaml, instructions.md, tools/, and a corresponding
+  scenario under `scenarios/`.
+- [x] **Color output / TTY detection.** `internal/color/color.go` provides
+  ANSI escape wrappers (Green, Red, Yellow, Cyan, Bold) with auto-detection
+  via NO_COLOR / FORCE_COLOR / TERM conventions. `--no-color` flag forces
+  plain output. Applied to: `ast test` (steps, PASSED/FAILED, SUCCESS),
+  `ast validate` (OK/WARN/FAIL), `ast list` (table headers, status),
+  `ast report` (PASSED/FAILED in console view).
 
 ---
 
@@ -112,17 +125,16 @@ right place.
 
 ---
 
-## Conceptual gap — explicit decision still pending
+## Conceptual gap — resolved
 
-- [ ] **What does "compatible with most agents" actually mean for this tool?**
-  Two very different interpretations:
-  - **(A) Loader-only** — read Claude Code / Cursor / Codex skill
-    formats and run them all against ast's internal tool-use loop.
-    Scoped as "Multi-format skill loader" above. Modest work.
-  - **(B) Runner-level** — actually invoke the external agent CLIs
-    (`claude-code`, `cursor-cli`, `codex`) as subprocesses, parse
-    their output, intercept their tool calls. Effectively a whole new
-    `internal/runner/external/` layer per agent. Larger than the
-    entire current project.
-
-  Recommendation: ship (A) in v0.1, defer (B) to a v0.2+ design doc.
+- [x] **What does "compatible with most agents" actually mean for this tool?**
+  Resolution: shipped (A) in v0.1 via multi-format loader (commit `3393af7`).
+  Four formats supported: Anthropic (skill.yaml + tools/), Cursor
+  (.cursorrules / .cursor/rules/*.mdc), AGENTS.md (.agents/*.md),
+  and a frontmatter fallback. (B) — external runner-level invocation of
+  agent CLIs — is deferred to v0.2+. The March 2026 skill-creator evals
+  update covers much of the use case (B) would target, making it less
+  urgent than it appeared when this was drafted. If user demand emerges,
+  the right architecture is probably the opposite direction: let users
+  POST execution traces to ast's judge, not have ast drive their agent.
+  See the `ast judge` discussion elsewhere.

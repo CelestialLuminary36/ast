@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/hhy/ast/internal/color"
 )
 
 func Save(path string, r *Report) error {
@@ -51,9 +53,9 @@ func (r *Report) PrintConsole() {
 
 	total := len(r.Entries)
 	for i, e := range r.Entries {
-		status := "PASSED"
+		status := color.Green("PASSED")
 		if !e.Passed {
-			status = "FAILED"
+			status = color.Red("FAILED")
 		}
 		fmt.Printf("运行场景 [%d/%d]: %s ... %s\n", i+1, total, e.ScenarioID, status)
 		if len(e.MutatedFiles) > 0 {

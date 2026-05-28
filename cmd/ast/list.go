@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/hhy/ast/internal/color"
 	"github.com/hhy/ast/internal/scenario"
 	"github.com/hhy/ast/internal/skill"
 )
@@ -83,13 +84,23 @@ func cmdList(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "SKILL\tID\tFORMAT\tSCENARIOS\tSTATUS")
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+		color.Bold("SKILL"), color.Bold("ID"), color.Bold("FORMAT"), color.Bold("SCENARIOS"), color.Bold("STATUS"))
 	for _, r := range rows {
 		detail := ""
 		if r.detail != "" {
 			detail = "  " + r.detail
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s%s\n", r.dirName, r.id, r.format, r.scenarios, r.status, detail)
+		statusStr := r.status
+		switch r.status {
+		case "OK":
+			statusStr = color.Green(r.status)
+		case "WARN":
+			statusStr = color.Yellow(r.status)
+		case "ERROR":
+			statusStr = color.Red(r.status)
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s%s\n", r.dirName, r.id, r.format, r.scenarios, statusStr, detail)
 	}
 	return w.Flush()
 }

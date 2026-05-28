@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hhy/ast/internal/color"
 	"github.com/hhy/ast/internal/config"
 	"github.com/hhy/ast/internal/judge"
 	"github.com/hhy/ast/internal/provider"
@@ -33,6 +34,14 @@ func main() {
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(1)
+	}
+
+	// --no-color can appear anywhere in args; detect it early.
+	for _, a := range os.Args {
+		if a == "--no-color" {
+			color.Enabled = false
+			break
+		}
 	}
 
 	switch os.Args[1] {
@@ -317,9 +326,9 @@ func cmdTest(args []string) error {
 	}
 	rnr := runner.NewLLMRunner(p, pc)
 
-	fmt.Printf("[INFO] Skill: %s\n", sk.Name)
-	fmt.Printf("[INFO] Provider: %s (%s)\n", pc.Type, pc.Model)
-	fmt.Printf("[INFO] %d scenario(s) to run...\n\n", len(scenarios))
+	fmt.Printf("%s Skill: %s\n", color.Cyan("[INFO]"), sk.Name)
+	fmt.Printf("%s Provider: %s (%s)\n", color.Cyan("[INFO]"), pc.Type, pc.Model)
+	fmt.Printf("%s %d scenario(s) to run...\n\n", color.Cyan("[INFO]"), len(scenarios))
 
 	jdg := judge.NewRuleJudge()
 
@@ -332,58 +341,58 @@ func cmdTest(args []string) error {
 
 	ctx := context.Background()
 	for _, sc := range scenarios {
-		fmt.Printf("\n=== 场景: %s ===\n", sc.ID)
-		fmt.Printf("[STEP 1] 初始化 Git 隔离沙盒 ... ")
+		fmt.Printf("\n%s %s\n", color.Bold("==="), color.Cyan(sc.ID))
+		fmt.Printf("%s 初始化 Git 隔离沙盒 ... ", color.Cyan("[STEP 1]"))
 		ws, err := workspace.New("")
 		if err != nil {
-			fmt.Printf("FAILED: %v\n", err)
+			fmt.Printf("%s: %v\n", color.Red("FAILED"), err)
 			rep.AddEntry(report.Entry{
 				ScenarioID: sc.ID,
 				Passed:     false,
 				Errors:     []string{fmt.Sprintf("workspace init: %v", err)},
 			})
-			fmt.Printf("[RESULT] %s ERROR\n", sc.ID)
+			fmt.Printf("%s %s %s\n", color.Cyan("[RESULT]"), sc.ID, color.Red("ERROR"))
 			continue
 		}
-		fmt.Println("SUCCESS")
+		fmt.Println(color.Green("SUCCESS"))
 
-		fmt.Printf("[STEP 2] 调用 Agent ... ")
+		fmt.Printf("%s 调用 Agent ... ", color.Cyan("[STEP 2]"))
 		result, runErr := rnr.Run(ctx, *sk, sc, ws.Root)
 		ws.Cleanup()
 		if runErr != nil {
-			fmt.Printf("FAILED: %v\n", runErr)
+			fmt.Printf("%s: %v\n", color.Red("FAILED"), runErr)
 			rep.AddEntry(report.Entry{
 				ScenarioID: sc.ID,
 				Passed:     false,
 				Errors:     []string{fmt.Sprintf("run error: %v", runErr)},
 			})
-			fmt.Printf("[RESULT] %s ERROR\n", sc.ID)
+			fmt.Printf("%s %s %s\n", color.Cyan("[RESULT]"), sc.ID, color.Red("ERROR"))
 			continue
 		}
-		fmt.Printf("SUCCESS (耗时 %s)\n", result.Duration.Round(time.Millisecond))
+		fmt.Printf("%s (耗时 %s)\n", color.Green("SUCCESS"), result.Duration.Round(time.Millisecond))
 
-		fmt.Printf("[STEP 3] 规则审计 ... ")
+		fmt.Printf("%s 规则审计 ... ", color.Cyan("[STEP 3]"))
 		judgement, err := jdg.Judge(result, sc)
 		if err != nil {
-			fmt.Printf("ERROR: %v\n", err)
+			fmt.Printf("%s: %v\n", color.Red("ERROR"), err)
 			rep.AddEntry(report.Entry{
 				ScenarioID: sc.ID,
 				Passed:     false,
 				Output:     result.Output,
 				Errors:     []string{fmt.Sprintf("judge error: %v", err)},
 			})
-			fmt.Printf("[RESULT] %s ERROR\n", sc.ID)
+			fmt.Printf("%s %s %s\n", color.Cyan("[RESULT]"), sc.ID, color.Red("ERROR"))
 			continue
 		}
 		if judgement.Passed {
-			fmt.Println("PASSED")
-			fmt.Printf("[RESULT] %s PASSED\n", sc.ID)
+			fmt.Println(color.Green("PASSED"))
+			fmt.Printf("%s %s %s\n", color.Cyan("[RESULT]"), sc.ID, color.Green("PASSED"))
 		} else {
-			fmt.Printf("FAILED (%d 条规则未通过)\n", len(judgement.Errors))
+			fmt.Printf("%s (%d 条规则未通过)\n", color.Red("FAILED"), len(judgement.Errors))
 			for _, e := range judgement.Errors {
-				fmt.Printf("    - %s\n", e)
+				fmt.Printf("    - %s\n", color.Red(e))
 			}
-			fmt.Printf("[RESULT] %s FAILED\n", sc.ID)
+			fmt.Printf("%s %s %s\n", color.Cyan("[RESULT]"), sc.ID, color.Red("FAILED"))
 		}
 
 		rep.AddEntry(report.Entry{
@@ -440,19 +449,19 @@ func cmdValidate(args []string) error {
 	// Best-effort: re-load to print the detected format. Cheap, and avoids
 	// changing validateSkill's signature just to surface this info.
 	if sk, err := skill.LoadFromDir(skillDir); err == nil {
-		fmt.Printf("  [INFO] detected format: %s\n", sk.Format)
+		fmt.Printf("  %s detected format: %s\n", color.Cyan("[INFO]"), sk.Format)
 	}
 	for _, w := range warns {
-		fmt.Printf("  [WARN] %s\n", w)
+		fmt.Printf("  %s %s\n", color.Yellow("[WARN]"), w)
 	}
 	for _, e := range issues {
-		fmt.Printf("  [FAIL] %s\n", e)
+		fmt.Printf("  %s %s\n", color.Red("[FAIL]"), e)
 	}
 	if len(issues) == 0 {
 		if len(warns) == 0 {
-			fmt.Println("  OK")
+			fmt.Printf("  %s\n", color.Green("OK"))
 		} else {
-			fmt.Printf("  OK (%d warning(s))\n", len(warns))
+			fmt.Printf("  %s (%d warning(s))\n", color.Green("OK"), len(warns))
 		}
 		return nil
 	}

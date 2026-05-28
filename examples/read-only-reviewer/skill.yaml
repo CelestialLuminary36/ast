@@ -1,0 +1,4 @@
+id: read-only-reviewer
+name: Read-Only Reviewer
+version: "1.0.0"
+description: Review code changes without running commands — annotate only
