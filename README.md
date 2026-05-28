@@ -40,6 +40,23 @@ go build -o ast ./cmd/ast
 
 Verify with `ast version`.
 
+## Updating
+
+Same as installing — re-run your method, it overwrites the old binary:
+
+```bash
+# install.sh (re-running automatically replaces the old version)
+curl -fsSL https://raw.githubusercontent.com/CelestialLuminary36/ast/main/install.sh | bash
+
+# Homebrew
+brew upgrade ast
+
+# go install
+go install github.com/CelestialLuminary36/ast/cmd/ast@latest
+```
+
+Pre-built binary users: download the new archive from the [releases page](https://github.com/CelestialLuminary36/ast/releases) and replace the old `ast` / `ast.exe`.
+
 ## Quick start
 
 ```bash

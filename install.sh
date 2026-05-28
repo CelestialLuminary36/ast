@@ -76,11 +76,18 @@ esac
 
 # ---------- install ----------
 mkdir -p "$PREFIX"
+
+ACTION="Installed"
+if [ -f "$PREFIX/ast" ]; then
+	OLD_VERSION=$("$PREFIX/ast" version 2>/dev/null | awk '{print $2}' || echo "unknown")
+	ACTION="Upgraded from ${OLD_VERSION} to"
+fi
+
 mv ast "$PREFIX/ast"
 chmod +x "$PREFIX/ast"
 
 echo ""
-echo "ast ${VERSION} installed to $PREFIX/ast"
+echo "ast ${VERSION} ${ACTION} → $PREFIX/ast"
 if ! echo "$PATH" | grep -q "$PREFIX"; then
 	echo "  NOTE: $PREFIX is not on your PATH. Add it, or re-run with:"
 	echo "    PREFIX=/usr/local/bin bash install.sh"
