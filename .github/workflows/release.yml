@@ -10,7 +10,6 @@ on:
       - "v*"
 
 permissions:
-  # Required for goreleaser to create/update releases and upload assets.
   contents: write
 
 jobs:
@@ -36,4 +35,4 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GORELEASER_TOKEN }}
