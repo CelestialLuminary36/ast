@@ -94,6 +94,10 @@ Tools available to the agent: %s
 `
 
 func cmdGen(args []string) error {
+	if wantsHelp(args) {
+		fmt.Println(helpGen)
+		return nil
+	}
 	if len(args) < 1 {
 		return fmt.Errorf("missing skill directory\n\nUsage: ast gen <skill-dir> [--out=DIR] [--count=N]")
 	}

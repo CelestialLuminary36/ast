@@ -93,15 +93,107 @@ Usage:
   ast report <report.json>         Display a previously generated report
   ast version                      Print the binary version and exit
 
+Run 'ast <command> --help' for details on a specific command.
+
 Environment:
   ANTHROPIC_API_KEY                API key for the anthropic provider
   OPENAI_API_KEY                   API key for the openai provider
   OLLAMA_API_KEY                   API key for the ollama provider (optional, Ollama is local)`)
 }
 
+// wantsHelp reports whether the user asked for help on a subcommand.
+// We accept --help, -h, and the bare word help so users typing
+// `ast gen help` get the same result as `ast gen --help`.
+func wantsHelp(args []string) bool {
+	for _, a := range args {
+		switch a {
+		case "--help", "-h", "help":
+			return true
+		}
+	}
+	return false
+}
+
+const helpInit = `ast init - Initialize a new ast project in the current directory.
+
+Usage:
+  ast init
+
+Creates:
+  ast.yaml                          Project config (provider, scenarios/reports dirs)
+  ./scenarios/example-skill/        A starter scenario you can adapt
+  ./skills/example-skill/           A minimal scaffold demonstrating skill.yaml + tools/
+  ./reports/                        Empty directory for test reports
+
+Refuses to overwrite an existing ast.yaml.`
+
+const helpValidate = `ast validate - Lint a skill package.
+
+Usage:
+  ast validate <skill-dir>
+
+Checks:
+  - Skill format is detectable (anthropic | cursor | agents-md | frontmatter)
+  - Instructions are non-empty
+  - tools/*.json declarations are well-formed (anthropic format only)
+  - scenarios/ subdir does not pollute the skill (warns if present)
+  - <scenarios_dir>/<skill-id>/ exists and contains valid scenarios
+
+Exits non-zero on the first error. Warnings do not affect exit code.`
+
+const helpGen = `ast gen - Draft scenarios for a skill using the configured LLM.
+
+Usage:
+  ast gen <skill-dir> [--out=DIR] [--count=N]
+
+Flags:
+  --out=DIR        Override the output directory.
+                   Default: <scenarios_dir>/<skill-id>/
+  --count=N        Number of scenarios to draft (1-10). Default: 3.
+
+Generated files are named gen-<id>.yaml and carry metadata.generated=true
+plus the generating model id, so reports can distinguish self-generated
+tests from human-authored ones. NOTE: a model satisfying its own generated
+test is not proof of compliance — review before trusting the result.
+
+Reads provider config from ast.yaml (or the env var for the provider).`
+
+const helpTest = `ast test - Run scenarios against a skill and produce a report.
+
+Usage:
+  ast test <skill-dir> [--scenarios=DIR]
+
+Flags:
+  --scenarios=DIR  Use scenarios from DIR instead of the default discovery.
+
+Discovery order (first match wins):
+  1. --scenarios=DIR (explicit)
+  2. <scenarios_dir>/<skill-id>/   (recommended layout)
+  3. <scenarios_dir>/              (flat fallback)
+  4. <skill-dir>/scenarios/        (deprecated; emits a stderr warning)
+
+Each scenario runs in a fresh git-initialized temp workspace. The runner
+captures the model's final output, every run_command invocation, and the
+list + contents of mutated files; the judge evaluates these against the
+scenario's assert block. Reports are written to <reports_dir>/ as both
+JSON and Markdown, and a console summary is printed at the end.`
+
+const helpReport = `ast report - Re-print a previously generated report.
+
+Usage:
+  ast report <report.json>
+
+Reads the JSON report produced by 'ast test' and renders the same
+console summary. Useful for sharing or revisiting older runs without
+re-executing scenarios.`
+
 // ---------- init ----------
 
-func cmdInit(_ []string) error {
+func cmdInit(args []string) error {
+	if wantsHelp(args) {
+		fmt.Println(helpInit)
+		return nil
+	}
 	if _, err := os.Stat(configFile); err == nil {
 		return fmt.Errorf("%s already exists", configFile)
 	}
@@ -173,6 +265,10 @@ assert:
 // ---------- test ----------
 
 func cmdTest(args []string) error {
+	if wantsHelp(args) {
+		fmt.Println(helpTest)
+		return nil
+	}
 	if len(args) < 1 {
 		return fmt.Errorf("missing skill directory\n\nUsage: ast test <skill-dir>")
 	}
@@ -321,6 +417,10 @@ func cmdTest(args []string) error {
 // ---------- validate ----------
 
 func cmdValidate(args []string) error {
+	if wantsHelp(args) {
+		fmt.Println(helpValidate)
+		return nil
+	}
 	if len(args) < 1 {
 		return fmt.Errorf("missing skill directory\n\nUsage: ast validate <skill-dir>")
 	}
@@ -417,6 +517,10 @@ func validateSkill(skillDir, scenariosDir string) (issues, warns []string) {
 // ---------- report ----------
 
 func cmdReport(args []string) error {
+	if wantsHelp(args) {
+		fmt.Println(helpReport)
+		return nil
+	}
 	if len(args) < 1 {
 		return fmt.Errorf("missing report file\n\nUsage: ast report <report.json>")
 	}
