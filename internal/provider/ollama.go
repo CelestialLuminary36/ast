@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hhy/ast/internal/config"
+	"github.com/CelestialLuminary36/ast/internal/config"
 )
 
 const defaultOllamaEndpoint = "http://localhost:11434"

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hhy/ast/internal/scenario"
+	"github.com/CelestialLuminary36/ast/internal/scenario"
 )
 
 func TestCopyDir(t *testing.T) {

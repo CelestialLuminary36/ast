@@ -1,4 +1,4 @@
-module github.com/hhy/ast
+module github.com/CelestialLuminary36/ast
 
 go 1.25.0
 

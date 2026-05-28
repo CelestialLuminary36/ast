@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hhy/ast/internal/color"
+	"github.com/CelestialLuminary36/ast/internal/color"
 )
 
 func Save(path string, r *Report) error {

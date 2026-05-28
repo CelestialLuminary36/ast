@@ -1,7 +1,7 @@
 # ast — Agent Skill Tester
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![CI](https://github.com/hhy/ast/actions/workflows/ci.yml/badge.svg)](https://github.com/hhy/ast/actions/workflows/ci.yml)
+[![CI](https://github.com/CelestialLuminary36/ast/actions/workflows/ci.yml/badge.svg)](https://github.com/CelestialLuminary36/ast/actions/workflows/ci.yml)
 
 A CLI for running scenario-based regression tests against Claude **Skills**. Each scenario gives the agent a prompt, an isolated workspace, and a set of assertions; `ast` runs the skill, observes file mutations / executed commands / model output, and produces a pass/fail report.
 
@@ -9,20 +9,33 @@ A CLI for running scenario-based regression tests against Claude **Skills**. Eac
 
 Pick whichever fits your setup:
 
-**Pre-built binary** — grab the archive for your OS/arch from the [latest release](https://github.com/hhy/ast/releases/latest), extract, and put `ast` (or `ast.exe`) on your `$PATH`.
+**One-liner (Linux / macOS)**:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CelestialLuminary36/ast/main/install.sh | bash
+```
+
+**Homebrew**:
+
+```bash
+brew tap CelestialLuminary36/tap
+brew install ast
+```
+
+**Pre-built binary** — grab the archive for your OS/arch from the [latest release](https://github.com/CelestialLuminary36/ast/releases/latest), extract, and put `ast` (or `ast.exe`) on your `$PATH`.
 
 **`go install`** — needs Go 1.25+:
 
 ```bash
-go install github.com/hhy/ast/cmd/ast@latest
+go install github.com/CelestialLuminary36/ast/cmd/ast@latest
 ```
 
 **From source**:
 
 ```bash
-git clone https://github.com/hhy/ast.git
+git clone https://github.com/CelestialLuminary36/ast.git
 cd ast
-go build -o ast ./cmd/ast        # produces ./ast (or ./ast.exe on Windows)
+go build -o ast ./cmd/ast
 ```
 
 Verify with `ast version`.

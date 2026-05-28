@@ -16,7 +16,7 @@ linters:
 
 linters-settings:
   goimports:
-    local-prefixes: github.com/hhy/ast
+    local-prefixes: github.com/CelestialLuminary36/ast
   misspell:
     locale: US
 

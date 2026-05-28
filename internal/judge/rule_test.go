@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hhy/ast/internal/runner"
-	"github.com/hhy/ast/internal/scenario"
+	"github.com/CelestialLuminary36/ast/internal/runner"
+	"github.com/CelestialLuminary36/ast/internal/scenario"
 )
 
 func TestMatchGlob_Doublestar(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/hhy/ast/internal/scenario"
-	"github.com/hhy/ast/internal/skill"
+	"github.com/CelestialLuminary36/ast/internal/scenario"
+	"github.com/CelestialLuminary36/ast/internal/skill"
 )
 
 type Runner interface {

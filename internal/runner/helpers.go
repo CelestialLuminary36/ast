@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hhy/ast/internal/scenario"
+	"github.com/CelestialLuminary36/ast/internal/scenario"
 )
 
 func prepareWorkspace(ctx context.Context, sc scenario.Scenario, ws string) error {

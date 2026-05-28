@@ -45,6 +45,19 @@ archives:
       - NOTICE
       - README.md
 
+brews:
+  - name: ast
+    repository:
+      owner: CelestialLuminary36
+      name: homebrew-tap
+    homepage: https://github.com/CelestialLuminary36/ast
+    description: "Run scenario-based regression tests against Claude Skills"
+    license: Apache-2.0
+    install: |
+      bin.install "ast"
+    test: |
+      system "#{bin}/ast", "version"
+
 checksum:
   name_template: "checksums.txt"
 
@@ -72,10 +85,14 @@ release:
   header: |
     `ast` — Agent Skill Tester
 
-    Install:
-
     ```bash
-    # Pick the archive for your OS/arch, extract, and put `ast` on $PATH.
-    # Or with Go installed:
-    go install github.com/hhy/ast/cmd/ast@v{{ .Version }}
+    # One-liner (Linux / macOS):
+    curl -fsSL https://raw.githubusercontent.com/CelestialLuminary36/ast/main/install.sh | bash
+
+    # Homebrew:
+    brew tap CelestialLuminary36/tap
+    brew install ast
+
+    # Go:
+    go install github.com/CelestialLuminary36/ast/cmd/ast@v{{ .Version }}
     ```

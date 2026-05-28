@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hhy/ast/internal/config"
+	"github.com/CelestialLuminary36/ast/internal/config"
 )
 
 const defaultOpenAIEndpoint = "https://api.openai.com/v1"

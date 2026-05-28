@@ -17,7 +17,7 @@ first — it's cheaper than rewriting.
   runners need no key and are fine for unit-test-level work.
 
 ```bash
-git clone https://github.com/hhy/ast.git
+git clone https://github.com/CelestialLuminary36/ast.git
 cd ast
 go build ./...
 go test ./...

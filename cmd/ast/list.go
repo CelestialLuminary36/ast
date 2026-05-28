@@ -8,9 +8,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/hhy/ast/internal/color"
-	"github.com/hhy/ast/internal/scenario"
-	"github.com/hhy/ast/internal/skill"
+	"github.com/CelestialLuminary36/ast/internal/color"
+	"github.com/CelestialLuminary36/ast/internal/scenario"
+	"github.com/CelestialLuminary36/ast/internal/skill"
 )
 
 const helpList = `ast list - Enumerate skills in a directory and show their status.
