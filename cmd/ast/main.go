@@ -10,6 +10,7 @@ import (
 
 	"github.com/CelestialLuminary36/ast/internal/color"
 	"github.com/CelestialLuminary36/ast/internal/config"
+	"github.com/CelestialLuminary36/ast/internal/i18n"
 	"github.com/CelestialLuminary36/ast/internal/judge"
 	"github.com/CelestialLuminary36/ast/internal/provider"
 	"github.com/CelestialLuminary36/ast/internal/report"
@@ -30,17 +31,24 @@ var (
 	date    = "unknown"
 )
 
+// langExplicit is set true when --lang appears on the CLI. When false,
+// loadConfigOrDefault is allowed to apply the config file's lang field.
+var langExplicit bool
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(1)
 	}
 
-	// --no-color can appear anywhere in args; detect it early.
+	// --no-color and --lang can appear anywhere in args; detect them early.
 	for _, a := range os.Args {
 		if a == "--no-color" {
 			color.Enabled = false
-			break
+		}
+		if v, ok := strings.CutPrefix(a, "--lang="); ok {
+			i18n.Set(i18n.Lang(strings.TrimSpace(v)))
+			langExplicit = true
 		}
 	}
 
@@ -228,34 +236,7 @@ func cmdInit(args []string) error {
 
 	examplePath := filepath.Join(exampleDir, "example.yaml")
 	if _, err := os.Stat(examplePath); os.IsNotExist(err) {
-		example := `id: example
-name: "示例场景"
-description: "验证 Agent 是否能生成 React 按钮组件且不触碰禁止文件"
-metadata:
-  tags: [frontend, react]
-  tier: smoke
-environment:
-  fixture_dir: ""
-  init_script: ""
-input:
-  user_prompt: "Generate a simple React button component"
-assert:
-  file_mutations:
-    allowed:
-      - "src/**"
-    forbidden:
-      - "node_modules/**"
-      - "package-lock.json"
-  command_execution:
-    must_have: []
-    must_not_have:
-      - contains: "rm -rf"
-  output_text:
-    must_include:
-      - "React"
-    must_not_include:
-      - "Vue"
-`
+		example := fmt.Sprintf("id: example\nname: %q\ndescription: %q\nmetadata:\n  tags: [frontend, react]\n  tier: smoke\nenvironment:\n  fixture_dir: \"\"\n  init_script: \"\"\ninput:\n  user_prompt: \"Generate a simple React button component\"\nassert:\n  file_mutations:\n    allowed:\n      - \"src/**\"\n    forbidden:\n      - \"node_modules/**\"\n      - \"package-lock.json\"\n  command_execution:\n    must_have: []\n    must_not_have:\n      - contains: \"rm -rf\"\n  output_text:\n    must_include:\n      - \"React\"\n    must_not_include:\n      - \"Vue\"\n", i18n.T(i18n.MsgExampleName), i18n.T(i18n.MsgExampleDesc))
 		if err := os.WriteFile(examplePath, []byte(example), 0644); err != nil {
 			return err
 		}
@@ -342,7 +323,7 @@ func cmdTest(args []string) error {
 	ctx := context.Background()
 	for _, sc := range scenarios {
 		fmt.Printf("\n%s %s\n", color.Bold("==="), color.Cyan(sc.ID))
-		fmt.Printf("%s 初始化 Git 隔离沙盒 ... ", color.Cyan("[STEP 1]"))
+		fmt.Printf("%s"+i18n.T(i18n.MsgInitGitSandbox), color.Cyan("[STEP 1]"))
 		ws, err := workspace.New("")
 		if err != nil {
 			fmt.Printf("%s: %v\n", color.Red("FAILED"), err)
@@ -356,7 +337,7 @@ func cmdTest(args []string) error {
 		}
 		fmt.Println(color.Green("SUCCESS"))
 
-		fmt.Printf("%s 调用 Agent ... ", color.Cyan("[STEP 2]"))
+		fmt.Printf("%s"+i18n.T(i18n.MsgCallAgent), color.Cyan("[STEP 2]"))
 		result, runErr := rnr.Run(ctx, *sk, sc, ws.Root)
 		ws.Cleanup()
 		if runErr != nil {
@@ -369,9 +350,9 @@ func cmdTest(args []string) error {
 			fmt.Printf("%s %s %s\n", color.Cyan("[RESULT]"), sc.ID, color.Red("ERROR"))
 			continue
 		}
-		fmt.Printf("%s (耗时 %s)\n", color.Green("SUCCESS"), result.Duration.Round(time.Millisecond))
+		fmt.Printf("%s"+i18n.T(i18n.MsgDuration), color.Green("SUCCESS"), result.Duration.Round(time.Millisecond))
 
-		fmt.Printf("%s 规则审计 ... ", color.Cyan("[STEP 3]"))
+		fmt.Printf("%s"+i18n.T(i18n.MsgRuleAudit), color.Cyan("[STEP 3]"))
 		judgement, err := jdg.Judge(result, sc)
 		if err != nil {
 			fmt.Printf("%s: %v\n", color.Red("ERROR"), err)
@@ -388,7 +369,7 @@ func cmdTest(args []string) error {
 			fmt.Println(color.Green("PASSED"))
 			fmt.Printf("%s %s %s\n", color.Cyan("[RESULT]"), sc.ID, color.Green("PASSED"))
 		} else {
-			fmt.Printf("%s (%d 条规则未通过)\n", color.Red("FAILED"), len(judgement.Errors))
+			fmt.Printf("%s"+i18n.T(i18n.MsgFailedRules), color.Red("FAILED"), len(judgement.Errors))
 			for _, e := range judgement.Errors {
 				fmt.Printf("    - %s\n", color.Red(e))
 			}
@@ -406,7 +387,7 @@ func cmdTest(args []string) error {
 		})
 	}
 
-	fmt.Println("\n[STEP 4] 生成测试报告 ...")
+	fmt.Println("\n[STEP 4] " + i18n.T(i18n.MsgGenReport))
 
 	reportsDir := cfg.ReportsDir
 	if err := os.MkdirAll(reportsDir, 0755); err != nil {
@@ -562,6 +543,9 @@ func loadConfigOrDefault() *config.Config {
 	if err != nil {
 		return config.Default()
 	}
+	if !langExplicit && cfg.Lang != "" {
+		i18n.Set(i18n.Lang(cfg.Lang))
+	}
 	return cfg
 }
 
@@ -654,6 +638,7 @@ func newProviderFromConfig(cfg config.ProviderConfig) (provider.Provider, error)
 func writeAnnotatedConfig(path string, cfg *config.Config) error {
 	pc := cfg.ResolveProvider()
 	body := fmt.Sprintf(`project: %s
+lang: %s
 scenarios_dir: %s
 reports_dir: %s
 
@@ -665,7 +650,7 @@ provider:
   endpoint: %s
   timeout: %d         # seconds per scenario
 `,
-		cfg.Project, cfg.ScenariosDir, cfg.ReportsDir,
+		cfg.Project, cfg.Lang, cfg.ScenariosDir, cfg.ReportsDir,
 		pc.Type, pc.Key, pc.Model, pc.Endpoint, pc.Timeout,
 	)
 	return os.WriteFile(path, []byte(body), 0o644)

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -75,6 +76,9 @@ func TestPrepareWorkspace(t *testing.T) {
 	})
 
 	t.Run("with init script", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("init script requires sh, not available on Windows")
+		}
 		ws3 := t.TempDir()
 		sc := scenario.Scenario{
 			ID: "init-script",

@@ -87,12 +87,13 @@ func TestToolExecutorRunCommand(t *testing.T) {
 	exec := NewToolExecutor(ws)
 
 	t.Run("execute simple command", func(t *testing.T) {
-		r := exec.runCommand(map[string]any{"command": "echo hello"})
+		// go version exists on all platforms where Go tests run.
+		r := exec.runCommand(map[string]any{"command": "go version"})
 		if r.Type != "success" {
 			t.Fatalf("type = %q, want success (%s)", r.Type, r.Content)
 		}
-		if !strings.Contains(r.Content, "hello") {
-			t.Errorf("output should contain 'hello', got %q", r.Content)
+		if !strings.Contains(r.Content, "go version") {
+			t.Errorf("output should contain 'go version', got %q", r.Content)
 		}
 	})
 

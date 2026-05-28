@@ -8,6 +8,7 @@ import (
 
 type Config struct {
 	Project      string         `yaml:"project"`
+	Lang         string         `yaml:"lang"`
 	ScenariosDir string         `yaml:"scenarios_dir"`
 	ReportsDir   string         `yaml:"reports_dir"`
 	API          APIConfig      `yaml:"api"`
@@ -63,6 +64,7 @@ func (c *Config) ResolveProvider() ProviderConfig {
 func Default() *Config {
 	return &Config{
 		Project:      "ast",
+		Lang:         "en",
 		ScenariosDir: "./scenarios",
 		ReportsDir:   "./reports",
 		API: APIConfig{

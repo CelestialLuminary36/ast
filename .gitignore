@@ -156,6 +156,9 @@ debug
 node_modules/
 
 # AST dev docs (local only)
+docs/promotion/
+
+# AST dev docs (local only)
 TODO.md
 CONTRIBUTING.md
 

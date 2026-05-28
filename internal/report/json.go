@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/CelestialLuminary36/ast/internal/color"
+	"github.com/CelestialLuminary36/ast/internal/i18n"
 )
 
 func Save(path string, r *Report) error {
@@ -57,12 +58,12 @@ func (r *Report) PrintConsole() {
 		if !e.Passed {
 			status = color.Red("FAILED")
 		}
-		fmt.Printf("运行场景 [%d/%d]: %s ... %s\n", i+1, total, e.ScenarioID, status)
+		fmt.Print(i18n.T(i18n.MsgRunScenario, i+1, total, e.ScenarioID, status))
 		if len(e.MutatedFiles) > 0 {
-			fmt.Printf("  ├── 文件变动: %s\n", strings.Join(e.MutatedFiles, ", "))
+			fmt.Print(i18n.T(i18n.MsgFileMutations, strings.Join(e.MutatedFiles, ", ")))
 		}
 		if len(e.ExecutedCmds) > 0 {
-			fmt.Printf("  ├── 执行命令: %s\n", strings.Join(e.ExecutedCmds, ", "))
+			fmt.Print(i18n.T(i18n.MsgExecutedCmds, strings.Join(e.ExecutedCmds, ", ")))
 		}
 		if !e.Passed {
 			for _, err := range e.Errors {
@@ -72,7 +73,7 @@ func (r *Report) PrintConsole() {
 	}
 
 	fmt.Println()
-	fmt.Printf("测试结果摘要: TOTAL: %d | PASSED: %d | FAILED: %d\n", total, r.Passed, r.Failed)
+	fmt.Print(i18n.T(i18n.MsgResultSummary, total, r.Passed, r.Failed))
 	fmt.Println("--------------------------------------------------")
 }
 
