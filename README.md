@@ -145,10 +145,28 @@ For each scenario the runner:
 ```
 ast init                                              Initialize project (ast.yaml + ./scenarios/example-skill/ + ./skills/example-skill/)
 ast validate <skill-dir>                              Lint a skill (structure, instructions, tools, scenarios; warns on nested scenarios/)
+ast gen <skill-dir> [--out=DIR] [--count=N]           Ask the configured LLM to draft N scenarios (default 3)
 ast test <skill-dir> [--runner=NAME] [--scenarios=DIR]
                                                       Run scenarios; flags override ast.yaml defaults
 ast report <report.json>                              Re-print a previously generated report
+ast version                                           Print version, commit, build date
 ```
+
+### `ast gen` — bootstrap scenarios with an LLM
+
+For users who don't want to hand-author scenarios from scratch, `ast gen`
+asks the configured provider to produce drafts:
+
+```bash
+ast gen ./skills/my-skill --count=5
+```
+
+Generated scenarios land in `./scenarios/<skill-id>/` as `gen-*.yaml`
+with `metadata.generated: true`, the generation timestamp, and the
+model id baked in. **Generated scenarios are a starting point, not
+proof of compliance** — the same model that wrote them also has to
+satisfy them at test time, so a passing run is at best a smoke test.
+Review and edit before relying on the result.
 
 ## Project layout
 

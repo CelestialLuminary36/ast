@@ -13,6 +13,13 @@ type Scenario struct {
 type Metadata struct {
 	Tags []string `yaml:"tags"`
 	Tier string   `yaml:"tier"`
+	// Generated is true for scenarios produced by `ast gen`. Reports surface
+	// these separately so a passing run on a self-generated test is not
+	// mistaken for proof of compliance — the same model that wrote the
+	// scenario also has to satisfy it.
+	Generated   bool   `yaml:"generated,omitempty"`
+	GeneratedAt string `yaml:"generated_at,omitempty"`
+	GeneratedBy string `yaml:"generated_by,omitempty"` // model id
 }
 
 type EnvConfig struct {

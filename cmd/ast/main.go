@@ -57,6 +57,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "validate failed: %v\n", err)
 			os.Exit(1)
 		}
+	case "gen":
+		if err := cmdGen(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "gen failed: %v\n", err)
+			os.Exit(1)
+		}
 	case "report":
 		if err := cmdReport(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "report failed: %v\n", err)
@@ -75,6 +80,10 @@ func usage() {
 Usage:
   ast init                         Generate ast.yaml + ./scenarios/<example>/ + ./skills/example-skill/
   ast validate <skill-dir>         Lint a skill: structure, instructions, tools, scenarios
+  ast gen <skill-dir> [--out=DIR] [--count=N]
+                                   Ask the configured LLM to generate N (default 3) scenario
+                                   drafts for the skill. Written to ./scenarios/<skill-id>/
+                                   with metadata.generated=true for downstream visibility.
   ast test <skill-dir> [--scenarios=DIR]
                                    Run scenarios against a skill. Discovery order:
                                      1. --scenarios=DIR (explicit)
